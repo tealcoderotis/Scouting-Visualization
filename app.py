@@ -23,6 +23,16 @@ class TeamLabel(QtWidgets.QWidget):
     def showStopDetails(self):
         mainWindow.showStopDetailsDialog(self.teamNumber)
 
+class KeySlider(QtWidgets.QWidget):
+    def __init__(self, key, parent=None):
+        super().__init__(parent)
+        self.mainLayout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.mainLayout)
+        self.keyLabel = QtWidgets.QLabel(text=key)
+        self.mainLayout.addWidget(self.keyLabel)
+        self.slider = QtWidgets.QSlider(orientation=QtCore.Qt.Orientation.Vertical)
+        self.mainLayout.addWidget(self.slider)
+
 class StopDetailsDialog(QtWidgets.QDialog):
     def __init__(self, teamNumber, data, parent=None):
         super().__init__(parent)
@@ -49,14 +59,23 @@ class StopDetailsDialog(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.mainScrollArea = QtWidgets.QScrollArea()
-        self.mainScrollArea.setWidgetResizable(True)
         self.mainWidget = QtWidgets.QWidget()
         self.mainLayout = QtWidgets.QVBoxLayout()
-        self.mainLayout.addStretch()
         self.mainWidget.setLayout(self.mainLayout)
-        self.mainScrollArea.setWidget(self.mainWidget)
-        self.setCentralWidget(self.mainScrollArea)
+        self.setCentralWidget(self.mainWidget)
+        self.sliderListWidget = QtWidgets.QWidget()
+        self.sliderListLayout = QtWidgets.QVBoxLayout()
+        self.sliderListLayout.addStretch()
+        self.sliderListWidget.setLayout(self.sliderListLayout)
+        self.mainLayout.addWidget(self.sliderListWidget)
+        self.teamListScrollArea = QtWidgets.QScrollArea()
+        self.teamListScrollArea.setWidgetResizable(True)
+        self.teamListWidget = QtWidgets.QWidget()
+        self.teamListLayout = QtWidgets.QVBoxLayout()
+        self.teamListLayout.addStretch()
+        self.teamListWidget.setLayout(self.teamListLayout)
+        self.teamListScrollArea.setWidget(self.teamListWidget)
+        self.mainLayout.addWidget(self.teamListScrollArea, stretch=1)
         self.setMinimumSize(400, 200)
         self.setGeometry(100, 50, 400, 600)
         self.show()
@@ -79,13 +98,20 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
             else:
                 sys.exit()
+        keys = analyzer.getColumns(self.dataFrame)
+        '''for key in keys:
+            self.addSlider(key)'''
         teams = analyzer.getAllTeams(self.dataFrame)
         for team in teams:
             self.addTeam(team)
         
     def addTeam(self, teamNumber):
         teamLabel = TeamLabel(teamNumber, analyzer.getTotalRobotStopsForEachType(self.dataFrame, teamNumber))
-        self.mainLayout.insertWidget(self.mainLayout.count() - 1, teamLabel)
+        self.teamListLayout.insertWidget(self.teamListLayout.count() - 1, teamLabel)
+
+    def addSlider(self, key):
+        keySlider = KeySlider(key)
+        self.sliderListLayout.insertWidget(self.sliderListLayout.count() - 1, keySlider)
 
     def showStopDetailsDialog(self, teamNumber):
         data = analyzer.getStopDetails(self.dataFrame, teamNumber)

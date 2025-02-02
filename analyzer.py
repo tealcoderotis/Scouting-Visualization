@@ -58,4 +58,7 @@ def getStopDetails(dataFrame, teamNumber):
     teamDataFrame = getDataFameForTeam(dataFrame, teamNumber)
     teamDataFrame = teamDataFrame.sort_values(by=["timestamp"])
     robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0])][["timestamp", "round_number", "robot_stop", "robot_injure"]]
-    return [robotStops.columns.values.tolist()] + robotStops.values.tolist()
+    return [getColumns(robotStops)] + robotStops.values.tolist()
+
+def getColumns(dataFrame):
+    return dataFrame.columns.values.tolist()
