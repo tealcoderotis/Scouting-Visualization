@@ -1,5 +1,5 @@
 {
-    "useDatabase": true,
+    "useDatabase": false,
     "databaseInfo": {
         "host": "localhost",
         "user": "root",

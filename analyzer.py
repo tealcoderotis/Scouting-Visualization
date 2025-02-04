@@ -1,9 +1,15 @@
 import mysql.connector
 import pandas
+from io import StringIO
 
 CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
 ROBOT_INJURE_VALUES = ["no_injure", "fixed_injure", "end_injure"]
+VALUE_GROUPS = {
+    "auto_coral": ["auto_coral_l1", "auto_coral_l2", "auto_coral_l3", "auto_coral_l4"],
+    "tele_coral": ["tele_coral_l1", "tele_coral_l2", "tele_coral_l3", "tele_coral_l4"]
+}
+NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "round_number", "timestamp", "scouter_name", "scouting_team"]
 
 def getDatabaseData(host, user, password, database, table):
     db = mysql.connector.connect(host=host, user=user, password=password, buffered=True)
@@ -22,19 +28,18 @@ def getDatabaseData(host, user, password, database, table):
 def getTextValueFromDropdown(value, dropdownList):
     return dropdownList[value]
 
-def preprocessDataFrame(dataFrame):
-    dataFrame["robot_stop"] = dataFrame["robot_stop"].apply(getTextValueFromDropdown, args=(ROBOT_STOP_VALUES,))
-    dataFrame["robot_injure"] = dataFrame["robot_injure"].apply(getTextValueFromDropdown, args=(ROBOT_INJURE_VALUES,))
-    return dataFrame
-
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    return preprocessDataFrame(dataFrame)
+    return dataFrame
 
 def getDataFrameFromCSV(filePath):
-    dataFrame = pandas.read_csv(filePath)
+    dataFrame = pandas.read_csv(filePath, sep=", ")
     return preprocessDataFrame(dataFrame)
+
+def preprocessDataFrame(dataFrame):
+    csv = dataFrame.drop(0).to_csv()
+    return pandas.read_csv(StringIO(csv))
 
 def getAllTeams(dataFrame):
     return dataFrame["team_number"].drop_duplicates().to_list()
@@ -60,5 +65,41 @@ def getStopDetails(dataFrame, teamNumber):
     robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0])][["timestamp", "round_number", "robot_stop", "robot_injure"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
 
+
 def getColumns(dataFrame):
     return dataFrame.columns.values.tolist()
+
+def getColumnsForZScore(dataFrame):
+    columns = getColumns(dataFrame)
+    dataTypes = dataFrame.dtypes.values.tolist()
+    columnsToReturn = []
+    for i in range(len(columns)):
+        if dataTypes[i] == int and not columns[i] in NOT_DATA_COLUMNS:
+            columnsToReturn.append(columns[i])
+    for name, value in VALUE_GROUPS.items():
+        columnsToReturn.insert(columnsToReturn.index(value[-1]) + 1, name)
+    return columnsToReturn
+
+def getTotals(dataFrame):
+    columns = getColumns(dataFrame)
+    dataTypes = dataFrame.dtypes.values.tolist()
+    columnsToUse = []
+    for i in range(len(columns)):
+        if dataTypes[i] == int and not columns[i] in NOT_DATA_COLUMNS:
+            columnsToUse.append(columns[i])
+    totals = pandas.DataFrame()
+    for column in columnsToUse:
+        totals[column] = dataFrame[column].sum()
+    for name, value in VALUE_GROUPS.items():
+        sum = 0
+        for column in value:
+            sum += dataFrame[column].sum()
+        totals.insert(totals.columns.get_loc(value[-1]) - 1, name, sum)
+
+def getTeamZScore(dataFrame, teamNumber, column, ranking):
+    totalDataFrame = getTotals(dataFrame)
+    teamDataFrame = getDataFameForTeam()
+    rawValue = teamDataFrame[column].sum()
+    mean = totalDataFrame[column].mean()
+    standardDeviation = totalDataFrame[column].std()
+    return ((rawValue - mean) / standardDeviation) * ranking
