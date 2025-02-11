@@ -29,20 +29,27 @@ class KeySlider(QtWidgets.QWidget):
         self.key = key
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainLayout)
+        self.upperWidget = QtWidgets.QWidget()
+        self.upperLayout = QtWidgets.QHBoxLayout()
+        self.upperWidget.setLayout(self.upperLayout)
         self.keyLabel = QtWidgets.QLabel(text=f"{self.key}: 0.0")
-        self.mainLayout.addWidget(self.keyLabel)
+        self.upperLayout.addWidget(self.keyLabel, stretch=1)
+        self.typeCombobox = QtWidgets.QComboBox()
+        self.typeCombobox.addItems(["Total", "Mean", "Mean (Q1 minimum)", "Max"])
+        self.upperLayout.addWidget(self.typeCombobox)
+        self.mainLayout.addWidget(self.upperWidget)
         self.slider = QtWidgets.QSlider(orientation=QtCore.Qt.Orientation.Horizontal)
         self.slider.valueChanged.connect(self.valueChanged)
         self.slider.setMinimum(-100)
         self.slider.setMaximum(100)
         self.slider.setValue(0)
         self.mainLayout.addWidget(self.slider)
-
-    def getValue(self):
-        return self.slider.value()
     
     def valueChanged(self):
         self.keyLabel.setText(f"{self.key}: {self.slider.value() / 100}")
+
+    def getValues(self):
+        return [self.key, [self.typeCombobox.currentIndex(), self.slider.value()]]
 
 class StopDetailsDialog(QtWidgets.QDialog):
     def __init__(self, teamNumber, data, parent=None):
@@ -67,32 +74,6 @@ class StopDetailsDialog(QtWidgets.QDialog):
         self.setMinimumSize(500, 300)
         self.show()
 
-class SliderDialog(QtWidgets.QDialog):
-    def __init__(self, dataFrame, parent=None):
-        super().__init__(parent)
-        self.dataFrame = dataFrame
-        self.mainLayout = QtWidgets.QVBoxLayout()
-        self.setLayout(self.mainLayout)
-        self.sliderListScrollArea = QtWidgets.QScrollArea()
-        self.sliderListScrollArea.setWidgetResizable(True)
-        self.sliderListWidget = QtWidgets.QWidget()
-        self.sliderListLayout = QtWidgets.QVBoxLayout()
-        self.sliderListLayout.addStretch()
-        for key in analyzer.getColumnsForZScore(dataFrame):
-            self.addSlider(key)
-        self.sliderListWidget.setLayout(self.sliderListLayout)
-        self.sliderListScrollArea.setWidget(self.sliderListWidget)
-        self.mainLayout.addWidget(self.sliderListScrollArea, stretch=1)
-        self.buttonBox = QtWidgets.QDialogButtonBox()
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        self.buttonBox.accepted.connect(self.accept)
-        self.buttonBox.rejected.connect(self.reject)
-        self.mainLayout.addWidget(self.buttonBox)
-        self.setWindowModality(True)
-        self.setWindowTitle(f"Set Sliders")
-        self.setMinimumSize(500, 300)
-        self.show()
-
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -100,6 +81,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mainLayout = QtWidgets.QHBoxLayout()
         self.mainWidget.setLayout(self.mainLayout)
         self.setCentralWidget(self.mainWidget)
+        self.rightWidget = QtWidgets.QWidget()
+        self.rightLayout = QtWidgets.QVBoxLayout()
+        self.rightWidget.setLayout(self.rightLayout)
         self.sliderListScrollArea = QtWidgets.QScrollArea()
         self.sliderListScrollArea.setWidgetResizable(True)
         self.sliderListWidget = QtWidgets.QWidget()
@@ -107,7 +91,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sliderListLayout.addStretch()
         self.sliderListWidget.setLayout(self.sliderListLayout)
         self.sliderListScrollArea.setWidget(self.sliderListWidget)
-        self.mainLayout.addWidget(self.sliderListScrollArea)
+        self.rightLayout.addWidget(self.sliderListScrollArea, stretch=1)
+        self.updateSlidersButton = QtWidgets.QPushButton(text="Update rankings")
+        self.updateSlidersButton.clicked.connect(self.updateTeamScores)
+        self.rightLayout.addWidget(self.updateSlidersButton)
+        self.mainLayout.addWidget(self.rightWidget)
         self.teamListScrollArea = QtWidgets.QScrollArea()
         self.teamListScrollArea.setWidgetResizable(True)
         self.teamListWidget = QtWidgets.QWidget()
@@ -157,6 +145,19 @@ class MainWindow(QtWidgets.QMainWindow):
     def addSlider(self, key):
         keySlider = KeySlider(key)
         self.sliderListLayout.insertWidget(self.sliderListLayout.count() - 1, keySlider)
+
+    def updateTeamScores(self):
+        sliderValues = {}
+        for i in range(self.sliderListLayout.count()):
+            if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
+                values = self.sliderListLayout.itemAt(i).widget().getValues()
+                sliderValues[values[0]] = values[1]
+        for i in reversed(range(self.teamListLayout.count())):
+            if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
+                self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
+        zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues)
+        for zScore in zScores:
+            self.addTeam(zScore[0])
 
 app = QtWidgets.QApplication(sys.argv)
 mainWindow = MainWindow()

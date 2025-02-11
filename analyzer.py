@@ -31,15 +31,27 @@ def getTextValueFromDropdown(value, dropdownList):
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    return dataFrame
+    return groupValues(dataFrame)
 
 def getDataFrameFromCSV(filePath):
-    dataFrame = pandas.read_csv(filePath, sep=", ")
-    return preprocessDataFrame(dataFrame)
+    dataFrame = pandas.read_csv(filePath, sep=", ", engine="python")
+    return groupValues(preprocessDataFrame(dataFrame))
 
 def preprocessDataFrame(dataFrame):
-    csv = dataFrame.drop(0).to_csv()
-    return pandas.read_csv(StringIO(csv))
+    csv = dataFrame.drop(0).to_csv(sep=",", index=False)
+    return pandas.read_csv(StringIO(csv), sep=",", engine="python")
+
+def applyGroupValues(data, columns):
+    sum = 0
+    for column in columns:
+        sum += data[column].sum()
+    return sum
+
+def groupValues(dataFrame):
+    for name, value in VALUE_GROUPS.items():
+        columnData = dataFrame[value].apply(applyGroupValues, args=(value,), axis=1)
+        dataFrame.insert(dataFrame.columns.get_loc(value[-1]) + 1, name, columnData)
+    return dataFrame
 
 def getAllTeams(dataFrame):
     return dataFrame["team_number"].drop_duplicates().to_list()
@@ -65,7 +77,6 @@ def getStopDetails(dataFrame, teamNumber):
     robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0])][["timestamp", "round_number", "robot_stop", "robot_injure"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
 
-
 def getColumns(dataFrame):
     return dataFrame.columns.values.tolist()
 
@@ -76,30 +87,75 @@ def getColumnsForZScore(dataFrame):
     for i in range(len(columns)):
         if dataTypes[i] == int and not columns[i] in NOT_DATA_COLUMNS:
             columnsToReturn.append(columns[i])
-    for name, value in VALUE_GROUPS.items():
-        columnsToReturn.insert(columnsToReturn.index(value[-1]) + 1, name)
     return columnsToReturn
 
-def getTotals(dataFrame):
-    columns = getColumns(dataFrame)
-    dataTypes = dataFrame.dtypes.values.tolist()
-    columnsToUse = []
-    for i in range(len(columns)):
-        if dataTypes[i] == int and not columns[i] in NOT_DATA_COLUMNS:
-            columnsToUse.append(columns[i])
-    totals = pandas.DataFrame()
-    for column in columnsToUse:
-        totals[column] = dataFrame[column].sum()
-    for name, value in VALUE_GROUPS.items():
-        sum = 0
-        for column in value:
-            sum += dataFrame[column].sum()
-        totals.insert(totals.columns.get_loc(value[-1]) - 1, name, sum)
+def getTotalDataFrame(dataFrame):
+    allColumns = getColumnsForZScore(dataFrame)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame(columns=allColumns)
+    for i in range(len(teams)):
+        teamDataFrame = getDataFameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].sum()
+    return newDataFrame
 
-def getTeamZScore(dataFrame, teamNumber, column, ranking):
-    totalDataFrame = getTotals(dataFrame)
-    teamDataFrame = getDataFameForTeam()
-    rawValue = teamDataFrame[column].sum()
-    mean = totalDataFrame[column].mean()
-    standardDeviation = totalDataFrame[column].std()
-    return ((rawValue - mean) / standardDeviation) * ranking
+def getAverageDataFrame(dataFrame):
+    allColumns = getColumnsForZScore(dataFrame)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame(columns=allColumns)
+    for i in range(len(teams)):
+        teamDataFrame = getDataFameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].mean()
+    return newDataFrame
+    
+def getAverageDataFrameQ1Minimum(dataFrame):
+    allColumns = getColumnsForZScore(dataFrame)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame(columns=allColumns)
+    for i in range(len(teams)):
+        teamDataFrame = getDataFameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            columnQuartile = teamDataFrame[column].quantile(0.25)
+            filteredColumn = teamDataFrame.loc[(dataFrame[column] >= columnQuartile)][column]
+            newDataFrame.loc[newDataFrame.index[i], column] = filteredColumn.mean()
+    return newDataFrame
+    
+def getMaxDataFrame(dataFrame):
+    allColumns = getColumnsForZScore(dataFrame)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame(columns=allColumns)
+    for i in range(len(teams)):
+        teamDataFrame = getDataFameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].max()
+    return newDataFrame
+
+def rankTeamsByZScore(dataFrame, sliderValues):
+    teams = getAllTeams(dataFrame)
+    teamZScores = {}
+    for team in teams:
+        currentScore = 0
+        for column, ranking in sliderValues.items():
+            currentScore += getTeamZScoreForColumn(dataFrame, ranking[0], team, column, ranking[1])
+        teamZScores[team] = currentScore
+    return sorted(teamZScores.items(), key=lambda x: x[1])
+
+def getTeamZScoreForColumn(dataFrame, frameType, teamNumber, column, ranking):
+    if frameType == 0:
+        mainDataFrame = getTotalDataFrame(dataFrame)
+    elif frameType == 1:
+        mainDataFrame = getAverageDataFrame(dataFrame)
+    elif frameType == 2:
+        mainDataFrame = getAverageDataFrameQ1Minimum(dataFrame)
+    elif frameType == 3:
+        mainDataFrame = getMaxDataFrame(dataFrame)
+    rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][column].values.tolist()[0]
+    mean = mainDataFrame[column].mean().tolist()
+    standardDeviation = mainDataFrame[column].std()
+    zScore = (rawValue - mean) / standardDeviation
+    return zScore * ranking
