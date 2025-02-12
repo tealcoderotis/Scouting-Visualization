@@ -157,5 +157,8 @@ def getTeamZScoreForColumn(dataFrame, frameType, teamNumber, column, ranking):
     rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][column].values.tolist()[0]
     mean = mainDataFrame[column].mean().tolist()
     standardDeviation = mainDataFrame[column].std()
-    zScore = (rawValue - mean) / standardDeviation
+    if standardDeviation != 0:
+        zScore = (rawValue - mean) / standardDeviation
+    else:
+        zScore = 0
     return zScore * ranking
