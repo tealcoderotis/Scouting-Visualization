@@ -7,14 +7,39 @@ ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
 ROBOT_INJURE_VALUES = ["no_injure", "fixed_injure", "end_injure"]
 VALUE_GROUPS = {
     "auto_coral": ["auto_coral_l1", "auto_coral_l2", "auto_coral_l3", "auto_coral_l4"],
-    "tele_coral": ["tele_coral_l1", "tele_coral_l2", "tele_coral_l3", "tele_coral_l4"]
+    "tele_coral": ["tele_coral_l1", "tele_coral_l2", "tele_coral_l3", "tele_coral_l4"],
+    "auto_coral_attempt": ["auto_coral", "auto_coral_missed"],
+    "tele_coral_attempt": ["tele_coral", "tele_coral_missed"],
+    "tele_algae_processor_attempt": ["tele_algae_processor", "tele_algae_processor_missed"],
+    "tele_algae_net_attempt": ["tele_algae_net", "tele_algae_net_missed"],
+    "tele_algae": ["tele_algae_processor", "tele_algae_net"],
+    "tele_algae_missed": ["tele_algae_processor_missed", "tele_algae_net_missed"],
+    "tele_algae_attempt": ["tele_algae", "tele_algae_missed"],
+    "auto_algae_processor_attempt": ["auto_algae_processor", "auto_algae_processor_missed"],
+    "auto_algae_net_attempt": ["auto_algae_net", "auto_algae_net_missed"],
+    "auto_algae": ["auto_algae_processor", "auto_algae_net"],
+    "auto_algae_missed": ["auto_algae_processor_missed", "auto_algae_net_missed"],
+    "auto_algae_attempt": ["auto_algae", "auto_algae_missed"]
 }
+ACCURACY_VALUES = {
+    "auto_coral_accuracy": ["auto_coral", "auto_coral_attempt"],
+    "auto_algae_processor_accuracy": ["auto_algae_processor", "auto_algae_processor_attempt"],
+    "auto_algae_net_accuracy": ["auto_algae_net", "auto_algae_net_attempt"],
+    "auto_algae_accuracy": ["auto_algae", "auto_algae_attempt"],
+    "tele_coral_accuracy": ["tele_coral", "tele_coral_attempt"],
+    "tele_algae_processor_accuracy": ["tele_algae_processor", "tele_algae_processor_attempt"],
+    "tele_algae_net_accuracy": ["tele_algae_net", "tele_algae_net_attempt"],
+    "tele_algae_accuracy": ["tele_algae", "tele_algae_attempt"]
+}
+COUNTED_VALUES = {
+    "climb": CLIMB_VALUES
+}
+
 NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "round_number", "timestamp", "scouter_name", "scouting_team"]
 
 def getDatabaseData(host, user, password, database, table):
     db = mysql.connector.connect(host=host, user=user, password=password, buffered=True)
     cursor = db.cursor()
-    #cursor.execute(f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=\"{table}\" AND TABLE_SCHEMA=\"{database}\";")
     cursor.execute(f"SHOW COLUMNS FROM {database}.{table}")
     columnData = cursor.fetchall()
     columnNames = []
@@ -31,11 +56,11 @@ def getTextValueFromDropdown(value, dropdownList):
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    return groupValues(dataFrame)
+    return accuracyValues(groupValues(dataFrame))
 
 def getDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=", ", engine="python")
-    return groupValues(preprocessDataFrame(dataFrame))
+    return accuracyValues(groupValues(preprocessDataFrame(dataFrame)))
 
 def preprocessDataFrame(dataFrame):
     csv = dataFrame.drop(0).to_csv(sep=",", index=False)
@@ -47,9 +72,19 @@ def applyGroupValues(data, columns):
         sum += data[column].sum()
     return sum
 
+def applyAccuracyValues(data, columns):
+    accuracy = data[columns[0]].sum() / data[columns[1]].sum()
+    return accuracy
+
 def groupValues(dataFrame):
     for name, value in VALUE_GROUPS.items():
         columnData = dataFrame[value].apply(applyGroupValues, args=(value,), axis=1)
+        dataFrame.insert(dataFrame.columns.get_loc(value[-1]) + 1, name, columnData)
+    return dataFrame
+
+def accuracyValues(dataFrame):
+    for name, value in ACCURACY_VALUES.items():
+        columnData = dataFrame[value].apply(applyAccuracyValues, args=(value,), axis=1)
         dataFrame.insert(dataFrame.columns.get_loc(value[-1]) + 1, name, columnData)
     return dataFrame
 
@@ -80,17 +115,21 @@ def getStopDetails(dataFrame, teamNumber):
 def getColumns(dataFrame):
     return dataFrame.columns.values.tolist()
 
-def getColumnsForZScore(dataFrame):
+def getColumnsForZScore(dataFrame, getCountedValues=True):
     columns = getColumns(dataFrame)
     dataTypes = dataFrame.dtypes.values.tolist()
     columnsToReturn = []
     for i in range(len(columns)):
-        if dataTypes[i] == int and not columns[i] in NOT_DATA_COLUMNS:
-            columnsToReturn.append(columns[i])
+        if columns[i] not in NOT_DATA_COLUMNS:
+            if (dataTypes[i] == int or dataTypes[i] == float):
+                columnsToReturn.append(columns[i])
+            elif columns[i] in COUNTED_VALUES and getCountedValues:
+                for value in COUNTED_VALUES[columns[i]]:
+                    columnsToReturn.append(value)
     return columnsToReturn
 
 def getTotalDataFrame(dataFrame):
-    allColumns = getColumnsForZScore(dataFrame)
+    allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame(columns=allColumns)
     for i in range(len(teams)):
@@ -101,7 +140,7 @@ def getTotalDataFrame(dataFrame):
     return newDataFrame
 
 def getAverageDataFrame(dataFrame):
-    allColumns = getColumnsForZScore(dataFrame)
+    allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame(columns=allColumns)
     for i in range(len(teams)):
@@ -112,7 +151,7 @@ def getAverageDataFrame(dataFrame):
     return newDataFrame
     
 def getAverageDataFrameQ1Minimum(dataFrame):
-    allColumns = getColumnsForZScore(dataFrame)
+    allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame(columns=allColumns)
     for i in range(len(teams)):
@@ -123,9 +162,12 @@ def getAverageDataFrameQ1Minimum(dataFrame):
             filteredColumn = teamDataFrame.loc[(dataFrame[column] >= columnQuartile)][column]
             newDataFrame.loc[newDataFrame.index[i], column] = filteredColumn.mean()
     return newDataFrame
+
+def getCountedValue():
+    pass
     
 def getMaxDataFrame(dataFrame):
-    allColumns = getColumnsForZScore(dataFrame)
+    allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame(columns=allColumns)
     for i in range(len(teams)):
@@ -141,7 +183,8 @@ def rankTeamsByZScore(dataFrame, sliderValues):
     for team in teams:
         currentScore = 0
         for column, ranking in sliderValues.items():
-            currentScore += getTeamZScoreForColumn(dataFrame, ranking[0], team, column, ranking[1])
+            if column in dataFrame.columns:
+                currentScore += getTeamZScoreForColumn(dataFrame, ranking[0], team, column, ranking[1])
         teamZScores[team] = currentScore
     return sorted(teamZScores.items(), key=lambda x: x[1])
 

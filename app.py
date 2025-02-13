@@ -104,8 +104,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.teamListWidget.setLayout(self.teamListLayout)
         self.teamListScrollArea.setWidget(self.teamListWidget)
         self.mainLayout.addWidget(self.teamListScrollArea)
-        self.setMinimumSize(800, 200)
-        self.setGeometry(100, 50, 800, 600)
+        self.setMinimumSize(1000, 500)
         self.show()
         file = open("config.json", "r")
         config = json.loads(file.read())
@@ -126,12 +125,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
             else:
                 sys.exit()
-        teams = analyzer.getAllTeams(self.dataFrame)
-        for team in teams:
-            self.addTeam(team)
         sliders = analyzer.getColumnsForZScore(self.dataFrame)
         for slider in sliders:
             self.addSlider(slider)
+        self.updateTeamScores()
         
     def addTeam(self, teamNumber):
         teamLabel = TeamLabel(teamNumber, analyzer.getTotalRobotStopsForEachType(self.dataFrame, teamNumber))
