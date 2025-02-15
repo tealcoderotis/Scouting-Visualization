@@ -24,7 +24,7 @@ class TeamLabel(QtWidgets.QWidget):
         mainWindow.showStopDetailsDialog(self.teamNumber)
 
 class KeySlider(QtWidgets.QWidget):
-    def __init__(self, key, parent=None):
+    def __init__(self, key, comboBoxAvaliable=True, parent=None):
         super().__init__(parent)
         self.key = key
         self.mainLayout = QtWidgets.QVBoxLayout()
@@ -32,47 +32,72 @@ class KeySlider(QtWidgets.QWidget):
         self.upperWidget = QtWidgets.QWidget()
         self.upperLayout = QtWidgets.QHBoxLayout()
         self.upperWidget.setLayout(self.upperLayout)
-        self.keyLabel = QtWidgets.QLabel(text=f"{self.key}: 0.0")
+        self.keyLabel = QtWidgets.QLabel(text=self.key)
         self.upperLayout.addWidget(self.keyLabel, stretch=1)
+        self.valueInput = QtWidgets.QLineEdit()
+        self.valueInput.setFixedWidth(50)
+        self.valueInput.setText("0.0")
+        self.valueInput.textEdited.connect(self.textInputValueChanged)
+        self.upperLayout.addWidget(self.valueInput)
         self.typeCombobox = QtWidgets.QComboBox()
-        self.typeCombobox.addItems(["Total", "Mean", "Mean (Q1 minimum)", "Max"])
-        self.upperLayout.addWidget(self.typeCombobox)
+        self.typeCombobox.addItems(["Total", "Mean", "Mean (Q1 minimum)", "Median", "Median (Q1 minimum)", "Mode", "Mode (Q1 minimum)", "Max"])
+        if comboBoxAvaliable:
+            self.upperLayout.addWidget(self.typeCombobox)
         self.mainLayout.addWidget(self.upperWidget)
         self.slider = QtWidgets.QSlider(orientation=QtCore.Qt.Orientation.Horizontal)
-        self.slider.valueChanged.connect(self.valueChanged)
+        self.slider.valueChanged.connect(self.sliderValueChanged)
         self.slider.setMinimum(-100)
         self.slider.setMaximum(100)
         self.slider.setValue(0)
         self.mainLayout.addWidget(self.slider)
     
-    def valueChanged(self):
-        self.keyLabel.setText(f"{self.key}: {self.slider.value() / 100}")
+    def sliderValueChanged(self):
+        self.valueInput.setText(str(self.slider.value() / 100))
+
+    def textInputValueChanged(self):
+        try:
+            value = float(self.valueInput.text())
+            if value >= -1.0 and value <= 1.0:
+                self.slider.valueChanged.disconnect()
+                self.slider.setValue(int(value * 100))
+                self.slider.valueChanged.connect(self.sliderValueChanged)
+        except ValueError:
+            pass
 
     def getValues(self):
-        return [self.key, [self.typeCombobox.currentIndex(), self.slider.value()]]
+        return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100]]
 
-class StopDetailsDialog(QtWidgets.QDialog):
-    def __init__(self, teamNumber, data, parent=None):
+class DataViewerDialog(QtWidgets.QDialog):
+    def __init__(self, data, title, comboBoxItems, parent=None):
         super().__init__(parent)
+        self.data = data
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainLayout)
+        self.dataComboBox = QtWidgets.QComboBox()
+        self.dataComboBox.addItems(comboBoxItems)
+        self.dataComboBox.currentIndexChanged.connect(self.addData)
+        self.mainLayout.addWidget(self.dataComboBox)
         self.mainTable = QtWidgets.QTableWidget()
         self.mainTable.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
+        self.mainLayout.addWidget(self.mainTable, stretch=1)
+        self.buttonBox = QtWidgets.QDialogButtonBox()
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox.accepted.connect(self.accept)
+        self.mainLayout.addWidget(self.buttonBox)
+        self.setWindowTitle(title)
+        self.setMinimumSize(500, 300)
+        self.show()
+        self.addData()
+
+    def addData(self):
+        self.mainTable.clear()
+        data = self.data[self.dataComboBox.currentIndex()]
         self.mainTable.setColumnCount(len(data[0]))
         self.mainTable.setRowCount(len(data) - 1)
         self.mainTable.setHorizontalHeaderLabels(data[0])
         for row in range(1, len(data)):
             for column in range(len(data[row])):
                 self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(data[row][column])))
-        self.mainLayout.addWidget(self.mainTable, stretch=1)
-        self.buttonBox = QtWidgets.QDialogButtonBox()
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Ok)
-        self.buttonBox.accepted.connect(self.accept)
-        self.mainLayout.addWidget(self.buttonBox)
-        self.setWindowModality(True)
-        self.setWindowTitle(f"{teamNumber}'s Robot Stops and Injures")
-        self.setMinimumSize(500, 300)
-        self.show()
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
@@ -95,6 +120,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updateSlidersButton = QtWidgets.QPushButton(text="Update rankings")
         self.updateSlidersButton.clicked.connect(self.updateTeamScores)
         self.rightLayout.addWidget(self.updateSlidersButton)
+        self.viewDataButton = QtWidgets.QPushButton(text="View data")
+        self.viewDataButton.clicked.connect(self.showDataViewDialog)
+        self.rightLayout.addWidget(self.viewDataButton)
         self.mainLayout.addWidget(self.rightWidget)
         self.teamListScrollArea = QtWidgets.QScrollArea()
         self.teamListScrollArea.setWidgetResizable(True)
@@ -105,7 +133,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.teamListScrollArea.setWidget(self.teamListWidget)
         self.mainLayout.addWidget(self.teamListScrollArea)
         self.setMinimumSize(1000, 500)
-        self.show()
+        self.showMaximized()
         file = open("config.json", "r")
         config = json.loads(file.read())
         file.close()
@@ -126,8 +154,8 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 sys.exit()
         sliders = analyzer.getColumnsForZScore(self.dataFrame)
-        for slider in sliders:
-            self.addSlider(slider)
+        for slider in sliders[0]:
+            self.addSlider(slider, slider in sliders[1])
         self.updateTeamScores()
         
     def addTeam(self, teamNumber):
@@ -136,11 +164,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def showStopDetailsDialog(self, teamNumber):
         data = analyzer.getStopDetails(self.dataFrame, teamNumber)
-        dialog = StopDetailsDialog(teamNumber, data, self)
+        dialog = DataViewerDialog([data], f"{teamNumber}'s Robot Stops and Injures", ["Robot stops"], self)
         dialog.exec()
 
-    def addSlider(self, key):
-        keySlider = KeySlider(key)
+    def showDataViewDialog(self):
+        dataList = [analyzer.getData(self.dataFrame, 0), analyzer.getData(self.dataFrame, 1), analyzer.getData(self.dataFrame, 2), analyzer.getData(self.dataFrame, 3), analyzer.getData(self.dataFrame, 4), analyzer.getData(self.dataFrame, 5), analyzer.getData(self.dataFrame, 6), analyzer.getData(self.dataFrame, 7)]
+        comboBoxList = ["Total", "Mean", "Mean (Q1 minimum)", "Median", "Median (Q1 minimum)", "Mode", "Mode (Q1 minimum)", "Max"]
+        dialog = DataViewerDialog(dataList, "Data Viewer", comboBoxList, self)
+        dialog.exec()
+
+    def addSlider(self, key, isCounted):
+        keySlider = KeySlider(key, not isCounted)
         self.sliderListLayout.insertWidget(self.sliderListLayout.count() - 1, keySlider)
 
     def updateTeamScores(self):
@@ -157,5 +191,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.addTeam(zScore[0])
 
 app = QtWidgets.QApplication(sys.argv)
+app.setStyle(QtWidgets.QStyleFactory.create("fusion"))
+palette = QtGui.QPalette()
+palette.setColor(QtGui.QPalette.Window, QtGui.QColor(25, 25, 25))
+palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor(255, 255, 255))
+app.setPalette(palette)
 mainWindow = MainWindow()
 app.exec()

@@ -32,7 +32,22 @@ ACCURACY_VALUES = {
     "tele_algae_accuracy": ["tele_algae", "tele_algae_attempt"]
 }
 COUNTED_VALUES = {
-    "climb": CLIMB_VALUES
+    "no_climb_accuracy": {
+        "column": "climb",
+        "favorableValue": "no_climb"
+    },
+    "park_climb_accuracy": {
+        "column": "climb",
+        "favorableValue": "park_climb"
+    },
+    "shallow_climb_accuracy": {
+        "column": "climb",
+        "favorableValue": "shallow_climb"
+    },
+    "deep_climb_accuracy": {
+        "column": "climb",
+        "favorableValue": "deep_climb"
+    }
 }
 
 NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "round_number", "timestamp", "scouter_name", "scouting_team"]
@@ -91,11 +106,11 @@ def accuracyValues(dataFrame):
 def getAllTeams(dataFrame):
     return dataFrame["team_number"].drop_duplicates().to_list()
 
-def getDataFameForTeam(dataFrame, teamNumber):
+def getDataFrameForTeam(dataFrame, teamNumber):
     return dataFrame[dataFrame["team_number"].values == teamNumber]
 
 def getTotalRobotStopsForEachType(dataFrame, teamNumber):
-    teamDataFrame = getDataFameForTeam(dataFrame, teamNumber)
+    teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
     stopList = []
     for i in range(1, len(ROBOT_STOP_VALUES)):
         robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[i])].shape[0]
@@ -107,7 +122,7 @@ def getTotalRobotStopsForEachType(dataFrame, teamNumber):
     return [stopList, injureList]
 
 def getStopDetails(dataFrame, teamNumber):
-    teamDataFrame = getDataFameForTeam(dataFrame, teamNumber)
+    teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
     teamDataFrame = teamDataFrame.sort_values(by=["timestamp"])
     robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0])][["timestamp", "round_number", "robot_stop", "robot_injure"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
@@ -123,17 +138,40 @@ def getColumnsForZScore(dataFrame, getCountedValues=True):
         if columns[i] not in NOT_DATA_COLUMNS:
             if (dataTypes[i] == int or dataTypes[i] == float):
                 columnsToReturn.append(columns[i])
-            elif columns[i] in COUNTED_VALUES and getCountedValues:
-                for value in COUNTED_VALUES[columns[i]]:
-                    columnsToReturn.append(value)
-    return columnsToReturn
+    if getCountedValues:
+        for column in COUNTED_VALUES:
+            columnsToReturn.append(column)
+        return [columnsToReturn, list(COUNTED_VALUES.keys())]
+    else:
+        return columnsToReturn
+    
+def getData(dataFrame, frameType):
+    if frameType == 0:
+        mainDataFrame = getTotalDataFrame(dataFrame)
+    elif frameType == 1:
+        mainDataFrame = getAverageDataFrame(dataFrame)
+    elif frameType == 2:
+        mainDataFrame = getAverageDataFrameQ1Minimum(dataFrame)
+    elif frameType == 3:
+        mainDataFrame = getMedianDataFrame(dataFrame)
+    elif frameType == 4:
+        mainDataFrame = getMedianDataFrameQ1Minimum(dataFrame)
+    elif frameType == 5:
+        mainDataFrame = getModeDataFrame(dataFrame)
+    elif frameType == 6:
+        mainDataFrame = getModeDataFrameQ1Minimum(dataFrame)
+    elif frameType == 7:
+        mainDataFrame = getMaxDataFrame(dataFrame)
+    for column in COUNTED_VALUES:
+        mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
+    return [getColumns(mainDataFrame)] + mainDataFrame.values.tolist()
 
 def getTotalDataFrame(dataFrame):
     allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
-    newDataFrame = pandas.DataFrame(columns=allColumns)
+    newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
-        teamDataFrame = getDataFameForTeam(dataFrame, teams[i])
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
         newDataFrame.loc[i, "team_number"] = teams[i]
         for column in allColumns:
             newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].sum()
@@ -142,9 +180,9 @@ def getTotalDataFrame(dataFrame):
 def getAverageDataFrame(dataFrame):
     allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
-    newDataFrame = pandas.DataFrame(columns=allColumns)
+    newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
-        teamDataFrame = getDataFameForTeam(dataFrame, teams[i])
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
         newDataFrame.loc[i, "team_number"] = teams[i]
         for column in allColumns:
             newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].mean()
@@ -153,9 +191,9 @@ def getAverageDataFrame(dataFrame):
 def getAverageDataFrameQ1Minimum(dataFrame):
     allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
-    newDataFrame = pandas.DataFrame(columns=allColumns)
+    newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
-        teamDataFrame = getDataFameForTeam(dataFrame, teams[i])
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
         newDataFrame.loc[i, "team_number"] = teams[i]
         for column in allColumns:
             columnQuartile = teamDataFrame[column].quantile(0.25)
@@ -163,18 +201,75 @@ def getAverageDataFrameQ1Minimum(dataFrame):
             newDataFrame.loc[newDataFrame.index[i], column] = filteredColumn.mean()
     return newDataFrame
 
-def getCountedValue():
-    pass
+def getMedianDataFrame(dataFrame):
+    allColumns = getColumnsForZScore(dataFrame, False)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame()
+    for i in range(len(teams)):
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].median()
+    return newDataFrame
+
+def getMedianDataFrameQ1Minimum(dataFrame):
+    allColumns = getColumnsForZScore(dataFrame, False)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame()
+    for i in range(len(teams)):
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            columnQuartile = teamDataFrame[column].quantile(0.25)
+            filteredColumn = teamDataFrame.loc[(dataFrame[column] >= columnQuartile)][column]
+            newDataFrame.loc[newDataFrame.index[i], column] = filteredColumn.median()
+    return newDataFrame
+
+def getModeDataFrame(dataFrame):
+    allColumns = getColumnsForZScore(dataFrame, False)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame()
+    for i in range(len(teams)):
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].mode().tolist()[0]
+    return newDataFrame
+
+def getModeDataFrameQ1Minimum(dataFrame):
+    allColumns = getColumnsForZScore(dataFrame, False)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame()
+    for i in range(len(teams)):
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            columnQuartile = teamDataFrame[column].quantile(0.25)
+            filteredColumn = teamDataFrame.loc[(dataFrame[column] >= columnQuartile)][column]
+            newDataFrame.loc[newDataFrame.index[i], column] = filteredColumn.mode().tolist()[0]
+    return newDataFrame
     
 def getMaxDataFrame(dataFrame):
     allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
-    newDataFrame = pandas.DataFrame(columns=allColumns)
+    newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
-        teamDataFrame = getDataFameForTeam(dataFrame, teams[i])
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
         newDataFrame.loc[i, "team_number"] = teams[i]
         for column in allColumns:
             newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].max()
+    return newDataFrame
+
+def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame()
+    for i in range(len(teams)):
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        totalValues = teamDataFrame[column].shape[0]
+        favorableValues = teamDataFrame.loc[(dataFrame[column] == favorableColumn)].shape[0]
+        accuracy = favorableValues / totalValues
+        newDataFrame.loc[i, finalName] = accuracy
     return newDataFrame
 
 def rankTeamsByZScore(dataFrame, sliderValues):
@@ -185,6 +280,8 @@ def rankTeamsByZScore(dataFrame, sliderValues):
         for column, ranking in sliderValues.items():
             if column in dataFrame.columns:
                 currentScore += getTeamZScoreForColumn(dataFrame, ranking[0], team, column, ranking[1])
+            elif column in COUNTED_VALUES:
+                currentScore += getTeamZScoreAccuracyForColumn(dataFrame, team, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column, ranking[1])
         teamZScores[team] = currentScore
     return sorted(teamZScores.items(), key=lambda x: x[1])
 
@@ -196,10 +293,29 @@ def getTeamZScoreForColumn(dataFrame, frameType, teamNumber, column, ranking):
     elif frameType == 2:
         mainDataFrame = getAverageDataFrameQ1Minimum(dataFrame)
     elif frameType == 3:
+        mainDataFrame = getMedianDataFrame(dataFrame)
+    elif frameType == 4:
+        mainDataFrame = getMedianDataFrameQ1Minimum(dataFrame)
+    elif frameType == 5:
+        mainDataFrame = getModeDataFrame(dataFrame)
+    elif frameType == 6:
+        mainDataFrame = getModeDataFrameQ1Minimum(dataFrame)
+    elif frameType == 7:
         mainDataFrame = getMaxDataFrame(dataFrame)
     rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][column].values.tolist()[0]
-    mean = mainDataFrame[column].mean().tolist()
+    mean = mainDataFrame[column].mean()
     standardDeviation = mainDataFrame[column].std()
+    if standardDeviation != 0:
+        zScore = (rawValue - mean) / standardDeviation
+    else:
+        zScore = 0
+    return zScore * ranking
+
+def getTeamZScoreAccuracyForColumn(dataFrame, teamNumber, column, favorableValue, finalName, ranking):
+    mainDataFrame = getAccuracyDataFrame(dataFrame, column, favorableValue, finalName)
+    rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][finalName].values.tolist()[0]
+    mean = mainDataFrame[finalName].mean()
+    standardDeviation = mainDataFrame[finalName].std()
     if standardDeviation != 0:
         zScore = (rawValue - mean) / standardDeviation
     else:
