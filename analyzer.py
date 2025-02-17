@@ -1,6 +1,8 @@
+from ModifyData import ModifyPresetHandler
 import mysql.connector
 import pandas
 from io import StringIO
+import os
 
 CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
@@ -65,21 +67,39 @@ def getDatabaseData(host, user, password, database, table):
     tableData = cursor.fetchall()
     return [columnNames, tableData]
 
+def mergePointDataFrame(dataFrame, pointDataFrame):
+    for column in getColumns(pointDataFrame):
+        dataFrame[f"{column}_points"] = pointDataFrame[column]
+    return dataFrame
+
 def getTextValueFromDropdown(value, dropdownList):
     return dropdownList[value]
 
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    return accuracyValues(groupValues(dataFrame))
+    pointDataFrame = getPointDataFrame(dataFrame)
+    return accuracyValues(groupValues(mergePointDataFrame(dataFrame, pointDataFrame)))
 
 def getDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=", ", engine="python")
-    return accuracyValues(groupValues(preprocessDataFrame(dataFrame)))
+    pointDataFrame = getPointDataFrame(dataFrame)
+    return accuracyValues(groupValues(mergePointDataFrame(dropDataTypes(dataFrame), pointDataFrame)))
 
-def preprocessDataFrame(dataFrame):
+def dropDataTypes(dataFrame):
     csv = dataFrame.drop(0).to_csv(sep=",", index=False)
     return pandas.read_csv(StringIO(csv), sep=",", engine="python")
+
+def getPointDataFrame(dataFrame):
+    keys = pandas.read_csv("conversion.csv").iloc[:,3].values.tolist()
+    '''newDataFrame = pandas.DataFrame()
+    for key in keys:
+        newDataFrame[key] = dataFrame[key]'''
+    data = dataFrame.values.tolist()
+    data.insert(0, getColumns(dataFrame))
+    result = ModifyPresetHandler.runConversionFromCSV(data, "conversion.csv")
+    pointDataFrame = pandas.DataFrame(result)
+    return pointDataFrame
 
 def applyGroupValues(data, columns):
     sum = 0
@@ -136,7 +156,7 @@ def getColumnsForZScore(dataFrame, getCountedValues=True):
     columnsToReturn = []
     for i in range(len(columns)):
         if columns[i] not in NOT_DATA_COLUMNS:
-            if (dataTypes[i] == int or dataTypes[i] == float):
+            if (dataTypes[i] == "int64" or dataTypes[i] == "float64"):
                 columnsToReturn.append(columns[i])
     if getCountedValues:
         for column in COUNTED_VALUES:

@@ -2,6 +2,7 @@ import analyzer
 from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import json
+from os import path
 
 class TeamLabel(QtWidgets.QWidget):
     def __init__(self, teamNumber, robotStops, parent=None):
@@ -11,7 +12,7 @@ class TeamLabel(QtWidgets.QWidget):
         self.mainLayout = QtWidgets.QHBoxLayout()
         self.setLayout(self.mainLayout)
         if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]):
-            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}: ({", ".join(map(str, robotStops[0]))}) robot stops; ({", ".join(map(str, robotStops[1]))}) robot injures")
+            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}: ({', '.join(map(str, robotStops[0]))}) robot stops; ({', '.join(map(str, robotStops[1]))}) robot injures")
         else:
             self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}")
         self.mainLayout.addWidget(self.teamNumberLabel, stretch=1)
@@ -132,6 +133,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.teamListWidget.setLayout(self.teamListLayout)
         self.teamListScrollArea.setWidget(self.teamListWidget)
         self.mainLayout.addWidget(self.teamListScrollArea)
+        if path.exists("icon.ico"):
+            self.setWindowIcon(QtGui.QIcon("icon.ico"))
+        elif path.exists("_internal\\icon.ico"):
+            self.setWindowIcon(QtGui.QIcon("_internal\\icon.ico"))
         self.setMinimumSize(1000, 500)
         self.showMaximized()
         file = open("config.json", "r")
@@ -193,8 +198,26 @@ class MainWindow(QtWidgets.QMainWindow):
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle(QtWidgets.QStyleFactory.create("fusion"))
 palette = QtGui.QPalette()
-palette.setColor(QtGui.QPalette.Window, QtGui.QColor(25, 25, 25))
 palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor(255, 255, 255))
+palette.setColor(QtGui.QPalette.Button, QtGui.QColor(50, 50, 50))
+palette.setColor(QtGui.QPalette.Light, QtGui.QColor(75, 75, 75))
+palette.setColor(QtGui.QPalette.Midlight, QtGui.QColor(62, 62, 62))
+palette.setColor(QtGui.QPalette.Dark, QtGui.QColor(25, 25, 25))
+palette.setColor(QtGui.QPalette.Mid, QtGui.QColor(33, 33, 33))
+palette.setColor(QtGui.QPalette.Text, QtGui.QColor(255, 255, 255))
+palette.setColor(QtGui.QPalette.BrightText, QtGui.QColor(255, 255, 255))
+palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor(255, 255, 255))
+palette.setColor(QtGui.QPalette.Base, QtGui.QColor(0, 0, 0))
+palette.setColor(QtGui.QPalette.Window, QtGui.QColor(50, 50, 50))
+palette.setColor(QtGui.QPalette.Shadow, QtGui.QColor(0, 0, 0))
+palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor(200, 174, 64))
+palette.setColor(QtGui.QPalette.HighlightedText, QtGui.QColor(0, 0, 0))
+palette.setColor(QtGui.QPalette.Link, QtGui.QColor(200, 174, 64))
+palette.setColor(QtGui.QPalette.LinkVisited, QtGui.QColor(200, 174, 64))
+palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(25, 25, 25))
+palette.setColor(QtGui.QPalette.ToolTipBase, QtGui.QColor(255, 255, 220))
+palette.setColor(QtGui.QPalette.ToolTipText, QtGui.QColor(0, 0, 0))
+palette.setColor(QtGui.QPalette.PlaceholderText, QtGui.QColor(255, 255, 255, 127))
 app.setPalette(palette)
 mainWindow = MainWindow()
 app.exec()
