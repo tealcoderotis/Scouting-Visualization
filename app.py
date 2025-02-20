@@ -35,6 +35,8 @@ class KeySlider(QtWidgets.QWidget):
         self.upperWidget.setLayout(self.upperLayout)
         self.keyLabel = QtWidgets.QLabel(text=self.key)
         self.upperLayout.addWidget(self.keyLabel, stretch=1)
+        self.ignoreStopsAndInjuresCheckbox = QtWidgets.QCheckBox(text="Ignore stops and injures")
+        self.upperLayout.addWidget(self.ignoreStopsAndInjuresCheckbox)
         self.valueInput = QtWidgets.QLineEdit()
         self.valueInput.setFixedWidth(50)
         self.valueInput.setText("0.0")
@@ -66,7 +68,7 @@ class KeySlider(QtWidgets.QWidget):
             pass
 
     def getValues(self):
-        return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100]]
+        return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100, self.ignoreStopsAndInjuresCheckbox.isChecked()]]
 
 class DataViewerDialog(QtWidgets.QDialog):
     def __init__(self, data, title, comboBoxItems, parent=None):
@@ -137,7 +139,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.setWindowIcon(QtGui.QIcon("icon.ico"))
         elif path.exists("_internal\\icon.ico"):
             self.setWindowIcon(QtGui.QIcon("_internal\\icon.ico"))
-        self.setMinimumSize(1000, 500)
+        self.setMinimumSize(1200, 600)
+        self.setWindowTitle("Scouting Visualization")
         self.showMaximized()
         file = open("config.json", "r")
         config = json.loads(file.read())

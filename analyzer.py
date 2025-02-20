@@ -1,8 +1,6 @@
-from ModifyData import ModifyPresetHandler
 import mysql.connector
 import pandas
 from io import StringIO
-import os
 
 CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
@@ -21,7 +19,11 @@ VALUE_GROUPS = {
     "auto_algae_net_attempt": ["auto_algae_net", "auto_algae_net_missed"],
     "auto_algae": ["auto_algae_processor", "auto_algae_net"],
     "auto_algae_missed": ["auto_algae_processor_missed", "auto_algae_net_missed"],
-    "auto_algae_attempt": ["auto_algae", "auto_algae_missed"]
+    "auto_algae_attempt": ["auto_algae", "auto_algae_missed"],
+    "auto_coral_points": ["auto_coral_l1_points", "auto_coral_l2_points", "auto_coral_l3_points", "auto_coral_l4_points"],
+    "auto_algae_points": ["auto_algae_processor_points", "auto_algae_net_points"],
+    "tele_coral_points": ["tele_coral_l1_points", "tele_coral_l2_points", "tele_coral_l3_points", "tele_coral_l4_points"],
+    "tele_algae_points": ["tele_algae_processor_points", "tele_algae_net_points"]
 }
 ACCURACY_VALUES = {
     "auto_coral_accuracy": ["auto_coral", "auto_coral_attempt"],
@@ -51,8 +53,66 @@ COUNTED_VALUES = {
         "favorableValue": "deep_climb"
     }
 }
-
 NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "round_number", "timestamp", "scouter_name", "scouting_team"]
+POINT_VALUES = {
+    "auto_leave_points": {
+        "column": "auto_leave",
+        "pointValue": 3
+    },
+    "auto_coral_l1_points": {
+        "column": "auto_coral_l1",
+        "pointValue": 3
+    },
+    "auto_coral_l2_points": {
+        "column": "auto_coral_l2",
+        "pointValue": 4
+    },
+    "auto_coral_l3_points": {
+        "column": "auto_coral_l3",
+        "pointValue": 6
+    },
+    "auto_coral_l4_points": {
+        "column": "auto_coral_l4",
+        "pointValue": 7
+    },
+    "auto_algae_processor_points": {
+        "column": "auto_algae_processor",
+        "pointValue": 6
+    },
+    "auto_algae_net_points": {
+        "column": "auto_algae_net",
+        "pointValue": 4
+    },
+    "tele_coral_l1_points": {
+        "column": "tele_coral_l1",
+        "pointValue": 2
+    },
+    "tele_coral_l2_points": {
+        "column": "tele_coral_l2",
+        "pointValue": 3
+    },
+    "tele_coral_l3_points": {
+        "column": "tele_coral_l3",
+        "pointValue": 4
+    },
+    "tele_coral_l4_points": {
+        "column": "tele_coral_l4",
+        "pointValue": 5
+    },
+    "tele_algae_processor_points": {
+        "column": "tele_algae_processor",
+        "pointValue": 6
+    },
+    "tele_algae_net_points": {
+        "column": "tele_algae_net",
+        "pointValue": 4
+    },
+    "climb_points": {
+        "column": "climb",
+        "dropdown": CLIMB_VALUES,
+        "pointValue": [0, 2, 6, 12]
+    }
+}
 
 def getDatabaseData(host, user, password, database, table):
     db = mysql.connector.connect(host=host, user=user, password=password, buffered=True)
@@ -72,34 +132,36 @@ def mergePointDataFrame(dataFrame, pointDataFrame):
         dataFrame[f"{column}_points"] = pointDataFrame[column]
     return dataFrame
 
-def getTextValueFromDropdown(value, dropdownList):
-    return dropdownList[value]
-
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    pointDataFrame = getPointDataFrame(dataFrame)
-    return accuracyValues(groupValues(mergePointDataFrame(dataFrame, pointDataFrame)))
+    dataFrame = pointValues(dataFrame)
+    accuracyValues(groupValues(dataFrame))
 
 def getDataFrameFromCSV(filePath):
-    dataFrame = pandas.read_csv(filePath, sep=", ", engine="python")
-    pointDataFrame = getPointDataFrame(dataFrame)
-    return accuracyValues(groupValues(mergePointDataFrame(dropDataTypes(dataFrame), pointDataFrame)))
+    dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
+    dataFrame = dropDataTypes(dataFrame)
+    dataFrame = pointValues(dataFrame)
+    return accuracyValues(groupValues(dataFrame))
 
 def dropDataTypes(dataFrame):
     csv = dataFrame.drop(0).to_csv(sep=",", index=False)
     return pandas.read_csv(StringIO(csv), sep=",", engine="python")
 
-def getPointDataFrame(dataFrame):
-    keys = pandas.read_csv("conversion.csv").iloc[:,3].values.tolist()
-    '''newDataFrame = pandas.DataFrame()
-    for key in keys:
-        newDataFrame[key] = dataFrame[key]'''
-    data = dataFrame.values.tolist()
-    data.insert(0, getColumns(dataFrame))
-    result = ModifyPresetHandler.runConversionFromCSV(data, "conversion.csv")
-    pointDataFrame = pandas.DataFrame(result)
-    return pointDataFrame
+def applyPointValue(data, ranking):
+    return data * ranking
+
+def applyPointValueFromDropdown(data, dropdown, ranking):
+    return ranking[dropdown.index(data)]
+
+def pointValues(dataFrame):
+    for key, value in POINT_VALUES.items():
+        if "dropdown" in value:
+            columnData = dataFrame[value["column"]].apply(applyPointValueFromDropdown, args=(value["dropdown"], value["pointValue"],))
+        else:
+            columnData = dataFrame[value["column"]].apply(applyPointValue, args=(value["pointValue"],))
+        dataFrame.insert(dataFrame.columns.get_loc(value["column"]) + 1, key, columnData)
+    return dataFrame
 
 def applyGroupValues(data, columns):
     sum = 0
@@ -128,6 +190,9 @@ def getAllTeams(dataFrame):
 
 def getDataFrameForTeam(dataFrame, teamNumber):
     return dataFrame[dataFrame["team_number"].values == teamNumber]
+
+def getDataFrameWithoutRobotStops(dataFrame):
+    return dataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  == ROBOT_INJURE_VALUES[0])]
 
 def getTotalRobotStopsForEachType(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
@@ -298,10 +363,14 @@ def rankTeamsByZScore(dataFrame, sliderValues):
     for team in teams:
         currentScore = 0
         for column, ranking in sliderValues.items():
+            if ranking[2]:
+                dataFrameToUse = getDataFrameWithoutRobotStops(dataFrame)
+            else:
+                dataFrameToUse = dataFrame
             if column in dataFrame.columns:
-                currentScore += getTeamZScoreForColumn(dataFrame, ranking[0], team, column, ranking[1])
+                currentScore += getTeamZScoreForColumn(dataFrameToUse, ranking[0], team, column, ranking[1])
             elif column in COUNTED_VALUES:
-                currentScore += getTeamZScoreAccuracyForColumn(dataFrame, team, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column, ranking[1])
+                currentScore += getTeamZScoreAccuracyForColumn(dataFrameToUse, team, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column, ranking[1])
         teamZScores[team] = currentScore
     return sorted(teamZScores.items(), key=lambda x: x[1])
 
