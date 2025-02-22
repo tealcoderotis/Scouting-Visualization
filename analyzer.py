@@ -135,14 +135,12 @@ def mergePointDataFrame(dataFrame, pointDataFrame):
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    dataFrame = pointValues(dataFrame)
-    accuracyValues(groupValues(dataFrame))
+    return accuracyValues(groupValues(pointValues(dataFrame)))
 
 def getDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
     dataFrame = dropDataTypes(dataFrame)
-    dataFrame = pointValues(dataFrame)
-    return accuracyValues(groupValues(dataFrame))
+    return accuracyValues(groupValues(pointValues(dataFrame)))
 
 def dropDataTypes(dataFrame):
     csv = dataFrame.drop(0).to_csv(sep=",", index=False)
@@ -192,7 +190,7 @@ def getDataFrameForTeam(dataFrame, teamNumber):
     return dataFrame[dataFrame["team_number"].values == teamNumber]
 
 def getDataFrameWithoutRobotStops(dataFrame):
-    return dataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  == ROBOT_INJURE_VALUES[0])]
+    return dataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[0]) & (dataFrame["robot_injure"]  == ROBOT_INJURE_VALUES[0])]
 
 def getTotalRobotStopsForEachType(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
@@ -230,25 +228,29 @@ def getColumnsForZScore(dataFrame, getCountedValues=True):
     else:
         return columnsToReturn
     
-def getData(dataFrame, frameType):
+def getData(dataFrame, frameType, dropRobotStops=False):
+    if dropRobotStops:
+        dataFrameToUse = getDataFrameWithoutRobotStops(dataFrame)
+    else:
+        dataFrameToUse = dataFrame.copy()
     if frameType == 0:
-        mainDataFrame = getTotalDataFrame(dataFrame)
+        mainDataFrame = getTotalDataFrame(dataFrameToUse)
     elif frameType == 1:
-        mainDataFrame = getAverageDataFrame(dataFrame)
+        mainDataFrame = getAverageDataFrame(dataFrameToUse)
     elif frameType == 2:
-        mainDataFrame = getAverageDataFrameQ1Minimum(dataFrame)
+        mainDataFrame = getAverageDataFrameQ1Minimum(dataFrameToUse)
     elif frameType == 3:
-        mainDataFrame = getMedianDataFrame(dataFrame)
+        mainDataFrame = getMedianDataFrame(dataFrameToUse)
     elif frameType == 4:
-        mainDataFrame = getMedianDataFrameQ1Minimum(dataFrame)
+        mainDataFrame = getMedianDataFrameQ1Minimum(dataFrameToUse)
     elif frameType == 5:
-        mainDataFrame = getModeDataFrame(dataFrame)
+        mainDataFrame = getModeDataFrame(dataFrameToUse)
     elif frameType == 6:
-        mainDataFrame = getModeDataFrameQ1Minimum(dataFrame)
+        mainDataFrame = getModeDataFrameQ1Minimum(dataFrameToUse)
     elif frameType == 7:
-        mainDataFrame = getMaxDataFrame(dataFrame)
+        mainDataFrame = getMaxDataFrame(dataFrameToUse)
     for column in COUNTED_VALUES:
-        mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
+        mainDataFrame[column] = getAccuracyDataFrame(dataFrameToUse, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
     return [getColumns(mainDataFrame)] + mainDataFrame.values.tolist()
 
 def getTotalDataFrame(dataFrame):
@@ -366,13 +368,13 @@ def rankTeamsByZScore(dataFrame, sliderValues):
             if ranking[2]:
                 dataFrameToUse = getDataFrameWithoutRobotStops(dataFrame)
             else:
-                dataFrameToUse = dataFrame
+                dataFrameToUse = dataFrame.copy()
             if column in dataFrame.columns:
                 currentScore += getTeamZScoreForColumn(dataFrameToUse, ranking[0], team, column, ranking[1])
             elif column in COUNTED_VALUES:
                 currentScore += getTeamZScoreAccuracyForColumn(dataFrameToUse, team, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column, ranking[1])
         teamZScores[team] = currentScore
-    return sorted(teamZScores.items(), key=lambda x: x[1])
+    return sorted(teamZScores.items(), key=lambda x: x[1], reverse=True)
 
 def getTeamZScoreForColumn(dataFrame, frameType, teamNumber, column, ranking):
     if frameType == 0:
@@ -391,11 +393,14 @@ def getTeamZScoreForColumn(dataFrame, frameType, teamNumber, column, ranking):
         mainDataFrame = getModeDataFrameQ1Minimum(dataFrame)
     elif frameType == 7:
         mainDataFrame = getMaxDataFrame(dataFrame)
-    rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][column].values.tolist()[0]
-    mean = mainDataFrame[column].mean()
-    standardDeviation = mainDataFrame[column].std()
-    if standardDeviation != 0:
-        zScore = (rawValue - mean) / standardDeviation
+    if mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][column].shape[0] > 0:
+        rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][column].values.tolist()[0]
+        mean = mainDataFrame[column].mean()
+        standardDeviation = mainDataFrame[column].std()
+        if standardDeviation != 0:
+            zScore = (rawValue - mean) / standardDeviation
+        else:
+            zScore = 0
     else:
         zScore = 0
     return zScore * ranking

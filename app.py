@@ -69,17 +69,31 @@ class KeySlider(QtWidgets.QWidget):
 
     def getValues(self):
         return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100, self.ignoreStopsAndInjuresCheckbox.isChecked()]]
+    
+    def updateValues(self, valueList):
+        self.typeCombobox.setCurrentIndex(valueList[0])
+        self.slider.setValue(int(valueList[1] * 100))
+        self.ignoreStopsAndInjuresCheckbox.setChecked(valueList[2])
+    
+    def getKey(self):
+        return self.key
 
 class DataViewerDialog(QtWidgets.QDialog):
-    def __init__(self, data, title, comboBoxItems, parent=None):
+    def __init__(self, data, title, comboBoxItems=None, checkBoxText="", checkBoxData=None, parent=None):
         super().__init__(parent)
         self.data = data
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainLayout)
         self.dataComboBox = QtWidgets.QComboBox()
-        self.dataComboBox.addItems(comboBoxItems)
-        self.dataComboBox.currentIndexChanged.connect(self.addData)
-        self.mainLayout.addWidget(self.dataComboBox)
+        if comboBoxItems != None:
+            self.dataComboBox.addItems(comboBoxItems)
+            self.dataComboBox.currentIndexChanged.connect(lambda: self.addData())
+            self.mainLayout.addWidget(self.dataComboBox)
+        self.dataCheckBox = QtWidgets.QCheckBox(text=checkBoxText)
+        if checkBoxData != None:
+            self.checkedData = checkBoxData
+            self.dataCheckBox.clicked.connect(lambda: self.addData())
+            self.mainLayout.addWidget(self.dataCheckBox)
         self.mainTable = QtWidgets.QTableWidget()
         self.mainTable.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
         self.mainLayout.addWidget(self.mainTable, stretch=1)
@@ -90,11 +104,21 @@ class DataViewerDialog(QtWidgets.QDialog):
         self.setWindowTitle(title)
         self.setMinimumSize(500, 300)
         self.show()
-        self.addData()
+        self.addData(0)
 
-    def addData(self):
-        self.mainTable.clear()
-        data = self.data[self.dataComboBox.currentIndex()]
+    def addData(self, index=None, checkBoxChecked=False):
+        for i in reversed(range(self.mainTable.rowCount())):
+            self.mainTable.removeRow(i)
+        if index != None:
+            if checkBoxChecked:
+                data = self.checkedData[index]
+            else:
+                data = self.data[index]
+        else:
+            if self.dataCheckBox.isChecked():
+                data = self.checkedData[self.dataComboBox.currentIndex()]
+            else:
+                data = self.data[self.dataComboBox.currentIndex()]
         self.mainTable.setColumnCount(len(data[0]))
         self.mainTable.setRowCount(len(data) - 1)
         self.mainTable.setHorizontalHeaderLabels(data[0])
@@ -135,6 +159,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.teamListWidget.setLayout(self.teamListLayout)
         self.teamListScrollArea.setWidget(self.teamListWidget)
         self.mainLayout.addWidget(self.teamListScrollArea)
+        fileMenu = self.menuBar().addMenu("File")
+        loadSlidersAction = QtWidgets.QAction("Load sliders", self)
+        loadSlidersAction.triggered.connect(self.loadSliders)
+        fileMenu.addAction(loadSlidersAction)
+        saveSlidersAction = QtWidgets.QAction("Save sliders as", self)
+        saveSlidersAction.triggered.connect(self.saveSliders)
+        fileMenu.addAction(saveSlidersAction)
+        fileMenu.addSeparator()
+        exitAction = QtWidgets.QAction("Exit", self)
+        exitAction.triggered.connect(sys.exit)
+        fileMenu.addAction(exitAction)
         if path.exists("icon.ico"):
             self.setWindowIcon(QtGui.QIcon("icon.ico"))
         elif path.exists("_internal\\icon.ico"):
@@ -150,7 +185,7 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 self.dataFrame = analyzer.getDataFrameFromDatabase(config["databaseInfo"]["host"], config["databaseInfo"]["user"], config["databaseInfo"]["password"], config["databaseInfo"]["database"], config["databaseInfo"]["table"])
             except:
-                result = QtWidgets.QMessageBox.critical(self,  "Cannot Connect to Database", "A database connection cannot be established. Do you want to use a CSV file instead?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+                result = QtWidgets.QMessageBox.critical(self, "Cannot Connect to Database", "A database connection cannot be established. Do you want to use a CSV file instead?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
                 if result != QtWidgets.QMessageBox.Yes:
                     sys.exit()
             else:
@@ -158,7 +193,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if not databaseSucessful:
             filePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)")[0]
             if filePath != "":
-                self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
+                try:
+                    self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
+                except Exception as e:
+                    QtWidgets.QMessageBox.critical(self, "Error", str(e))
+                    sys.exit()
             else:
                 sys.exit()
         sliders = analyzer.getColumnsForZScore(self.dataFrame)
@@ -172,13 +211,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def showStopDetailsDialog(self, teamNumber):
         data = analyzer.getStopDetails(self.dataFrame, teamNumber)
-        dialog = DataViewerDialog([data], f"{teamNumber}'s Robot Stops and Injures", ["Robot stops"], self)
+        dialog = DataViewerDialog([data], f"{teamNumber}'s Robot Stops and Injures", None, None, None, self)
         dialog.exec()
 
     def showDataViewDialog(self):
         dataList = [analyzer.getData(self.dataFrame, 0), analyzer.getData(self.dataFrame, 1), analyzer.getData(self.dataFrame, 2), analyzer.getData(self.dataFrame, 3), analyzer.getData(self.dataFrame, 4), analyzer.getData(self.dataFrame, 5), analyzer.getData(self.dataFrame, 6), analyzer.getData(self.dataFrame, 7)]
         comboBoxList = ["Total", "Mean", "Mean (Q1 minimum)", "Median", "Median (Q1 minimum)", "Mode", "Mode (Q1 minimum)", "Max"]
-        dialog = DataViewerDialog(dataList, "Data Viewer", comboBoxList, self)
+        dataListWithoutStops = [analyzer.getData(self.dataFrame, 0, True), analyzer.getData(self.dataFrame, 1, True), analyzer.getData(self.dataFrame, 2, True), analyzer.getData(self.dataFrame, 3, True), analyzer.getData(self.dataFrame, 4, True), analyzer.getData(self.dataFrame, 5, True), analyzer.getData(self.dataFrame, 6, True), analyzer.getData(self.dataFrame, 7, True)]
+        dialog = DataViewerDialog(dataList, "Data Viewer", comboBoxList, "Ignore stops and injues", dataListWithoutStops, self)
         dialog.exec()
 
     def addSlider(self, key, isCounted):
@@ -197,6 +237,39 @@ class MainWindow(QtWidgets.QMainWindow):
         zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues)
         for zScore in zScores:
             self.addTeam(zScore[0])
+
+    def saveSliders(self):
+        filePath = QtWidgets.QFileDialog.getSaveFileName(self, filter="JSON files (*.json)")[0]
+        if filePath != "":
+            sliderValues = {}
+            for i in range(self.sliderListLayout.count()):
+                if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
+                    values = self.sliderListLayout.itemAt(i).widget().getValues()
+                    sliderValues[values[0]] = values[1]
+            jsonFile = json.dumps(sliderValues)
+            file = open(filePath, "w")
+            file.write(jsonFile)
+            file.close()
+
+    def loadSliders(self):
+        filePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="JSON files (*.json)")[0]
+        if filePath != "":
+            valueNotInJson = False
+            try:
+                file = open(filePath, "r")
+                jsonFile = json.loads(file.read())
+                file.close()
+                for i in range(self.sliderListLayout.count()):
+                    if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
+                        slider = self.sliderListLayout.itemAt(i).widget()
+                        if slider.getKey() in jsonFile:
+                            slider.updateValues(jsonFile[slider.getKey()])
+                        else:
+                            valueNotInJson = True
+            except Exception as e:
+                QtWidgets.QMessageBox.critical(self, "Error", str(e))
+            if valueNotInJson:
+                QtWidgets.QMessageBox.warning(self, "Warning", "One or more slider values is not in the file")
 
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle(QtWidgets.QStyleFactory.create("fusion"))
