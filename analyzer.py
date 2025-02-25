@@ -53,7 +53,7 @@ COUNTED_VALUES = {
         "favorableValue": "deep_climb"
     }
 }
-NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "round_number", "timestamp", "scouter_name", "scouting_team"]
+NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "round_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition"]
 POINT_VALUES = {
     "auto_leave_points": {
         "column": "auto_leave",
@@ -192,6 +192,9 @@ def getDataFrameForTeam(dataFrame, teamNumber):
 def getDataFrameWithoutRobotStops(dataFrame):
     return dataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[0]) & (dataFrame["robot_injure"]  == ROBOT_INJURE_VALUES[0])]
 
+def getDataFrameWithoutNoShows(dataFrame):
+    return dataFrame.loc[(dataFrame["no_show"] == 0)]
+
 def getTotalRobotStopsForEachType(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
     stopList = []
@@ -202,12 +205,13 @@ def getTotalRobotStopsForEachType(dataFrame, teamNumber):
     for i in range(1, len(ROBOT_INJURE_VALUES)):
         robotStops = teamDataFrame.loc[(dataFrame["robot_injure"] == ROBOT_INJURE_VALUES[i])].shape[0]
         injureList.append(robotStops)
-    return [stopList, injureList]
+    noShows = teamDataFrame.loc[(dataFrame["no_show"] == 1)].shape[0]
+    return [stopList, injureList, noShows]
 
 def getStopDetails(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
     teamDataFrame = teamDataFrame.sort_values(by=["timestamp"])
-    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0])][["timestamp", "round_number", "robot_stop", "robot_injure"]]
+    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0]) | (dataFrame["no_show"]  != 0)][["timestamp", "round_number", "robot_stop", "robot_injure", "no_show"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
 
 def getColumns(dataFrame):
@@ -228,30 +232,30 @@ def getColumnsForZScore(dataFrame, getCountedValues=True):
     else:
         return columnsToReturn
     
-def getData(dataFrame, frameType, dropRobotStops=False):
-    if dropRobotStops:
-        dataFrameToUse = getDataFrameWithoutRobotStops(dataFrame)
-    else:
-        dataFrameToUse = dataFrame.copy()
+def getData(dataFrame, frameType):
     if frameType == 0:
-        mainDataFrame = getTotalDataFrame(dataFrameToUse)
+        mainDataFrame = getTotalDataFrame(dataFrame)
     elif frameType == 1:
-        mainDataFrame = getAverageDataFrame(dataFrameToUse)
+        mainDataFrame = getAverageDataFrame(dataFrame)
     elif frameType == 2:
-        mainDataFrame = getAverageDataFrameQ1Minimum(dataFrameToUse)
+        mainDataFrame = getAverageDataFrameQ1Minimum(dataFrame)
     elif frameType == 3:
-        mainDataFrame = getMedianDataFrame(dataFrameToUse)
+        mainDataFrame = getMedianDataFrame(dataFrame)
     elif frameType == 4:
-        mainDataFrame = getMedianDataFrameQ1Minimum(dataFrameToUse)
+        mainDataFrame = getMedianDataFrameQ1Minimum(dataFrame)
     elif frameType == 5:
-        mainDataFrame = getModeDataFrame(dataFrameToUse)
+        mainDataFrame = getModeDataFrame(dataFrame)
     elif frameType == 6:
-        mainDataFrame = getModeDataFrameQ1Minimum(dataFrameToUse)
+        mainDataFrame = getModeDataFrameQ1Minimum(dataFrame)
     elif frameType == 7:
-        mainDataFrame = getMaxDataFrame(dataFrameToUse)
+        mainDataFrame = getMaxDataFrame(dataFrame)
     for column in COUNTED_VALUES:
-        mainDataFrame[column] = getAccuracyDataFrame(dataFrameToUse, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
-    return [getColumns(mainDataFrame)] + mainDataFrame.values.tolist()
+        mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
+    mainDataFrame.sort_values(by=["team_number"])
+    return mainDataFrame
+
+def dataFrameToList(dataFrame):
+    return [getColumns(dataFrame)] + dataFrame.values.tolist()
 
 def getTotalDataFrame(dataFrame):
     allColumns = getColumnsForZScore(dataFrame, False)
@@ -365,10 +369,11 @@ def rankTeamsByZScore(dataFrame, sliderValues):
     for team in teams:
         currentScore = 0
         for column, ranking in sliderValues.items():
+            dataFrameToUse = dataFrame
             if ranking[2]:
-                dataFrameToUse = getDataFrameWithoutRobotStops(dataFrame)
-            else:
-                dataFrameToUse = dataFrame.copy()
+                dataFrameToUse = getDataFrameWithoutRobotStops(dataFrameToUse)
+            if ranking[3]:
+                dataFrameToUse = getDataFrameWithoutNoShows(dataFrameToUse)
             if column in dataFrame.columns:
                 currentScore += getTeamZScoreForColumn(dataFrameToUse, ranking[0], team, column, ranking[1])
             elif column in COUNTED_VALUES:
@@ -407,11 +412,14 @@ def getTeamZScoreForColumn(dataFrame, frameType, teamNumber, column, ranking):
 
 def getTeamZScoreAccuracyForColumn(dataFrame, teamNumber, column, favorableValue, finalName, ranking):
     mainDataFrame = getAccuracyDataFrame(dataFrame, column, favorableValue, finalName)
-    rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][finalName].values.tolist()[0]
-    mean = mainDataFrame[finalName].mean()
-    standardDeviation = mainDataFrame[finalName].std()
-    if standardDeviation != 0:
-        zScore = (rawValue - mean) / standardDeviation
+    if mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][finalName].shape[0] > 0:
+        rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][finalName].values.tolist()[0]
+        mean = mainDataFrame[finalName].mean()
+        standardDeviation = mainDataFrame[finalName].std()
+        if standardDeviation != 0:
+            zScore = (rawValue - mean) / standardDeviation
+        else:
+            zScore = 0
     else:
         zScore = 0
     return zScore * ranking

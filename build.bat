@@ -1,0 +1,1 @@
+python -m PyInstaller app.py -n "Scouting Visualization" -w -i "icon.ico" --add-data "icon.ico:."

@@ -5,20 +5,21 @@ import json
 from os import path
 
 class TeamLabel(QtWidgets.QWidget):
-    def __init__(self, teamNumber, robotStops, parent=None):
+    def __init__(self, teamNumber, zScore, robotStops, parent=None):
         super().__init__(parent)
         self.teamNumber = teamNumber
+        self.zScore = zScore
         self.setMinimumHeight(50)
         self.mainLayout = QtWidgets.QHBoxLayout()
         self.setLayout(self.mainLayout)
-        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]):
-            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}: ({', '.join(map(str, robotStops[0]))}) robot stops; ({', '.join(map(str, robotStops[1]))}) robot injures")
+        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0:
+            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score; ({', '.join(map(str, robotStops[0]))}) robot stops; ({', '.join(map(str, robotStops[1]))}) robot injures; {robotStops[2]} no shows")
         else:
-            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}")
+            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score")
         self.mainLayout.addWidget(self.teamNumberLabel, stretch=1)
         self.viewStopDetaisButton = QtWidgets.QPushButton(text="View timeline")
         self.viewStopDetaisButton.clicked.connect(self.showStopDetails)
-        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]):
+        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0:
             self.mainLayout.addWidget(self.viewStopDetaisButton)
 
     def showStopDetails(self):
@@ -35,6 +36,8 @@ class KeySlider(QtWidgets.QWidget):
         self.upperWidget.setLayout(self.upperLayout)
         self.keyLabel = QtWidgets.QLabel(text=self.key)
         self.upperLayout.addWidget(self.keyLabel, stretch=1)
+        self.ignoreNoShowsCheckbox = QtWidgets.QCheckBox(text="Ignore no shows")
+        self.upperLayout.addWidget(self.ignoreNoShowsCheckbox)
         self.ignoreStopsAndInjuresCheckbox = QtWidgets.QCheckBox(text="Ignore stops and injures")
         self.upperLayout.addWidget(self.ignoreStopsAndInjuresCheckbox)
         self.valueInput = QtWidgets.QLineEdit()
@@ -68,32 +71,23 @@ class KeySlider(QtWidgets.QWidget):
             pass
 
     def getValues(self):
-        return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100, self.ignoreStopsAndInjuresCheckbox.isChecked()]]
+        return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100, self.ignoreStopsAndInjuresCheckbox.isChecked(), self.ignoreNoShowsCheckbox.isChecked()]]
     
     def updateValues(self, valueList):
         self.typeCombobox.setCurrentIndex(valueList[0])
         self.slider.setValue(int(valueList[1] * 100))
         self.ignoreStopsAndInjuresCheckbox.setChecked(valueList[2])
+        self.ignoreNoShowsCheckbox.setChecked(valueList[3])
     
     def getKey(self):
         return self.key
-
-class DataViewerDialog(QtWidgets.QDialog):
-    def __init__(self, data, title, comboBoxItems=None, checkBoxText="", checkBoxData=None, parent=None):
+    
+class StopViewerDialog(QtWidgets.QDialog):
+    def __init__(self, data, title, parent=None):
         super().__init__(parent)
         self.data = data
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainLayout)
-        self.dataComboBox = QtWidgets.QComboBox()
-        if comboBoxItems != None:
-            self.dataComboBox.addItems(comboBoxItems)
-            self.dataComboBox.currentIndexChanged.connect(lambda: self.addData())
-            self.mainLayout.addWidget(self.dataComboBox)
-        self.dataCheckBox = QtWidgets.QCheckBox(text=checkBoxText)
-        if checkBoxData != None:
-            self.checkedData = checkBoxData
-            self.dataCheckBox.clicked.connect(lambda: self.addData())
-            self.mainLayout.addWidget(self.dataCheckBox)
         self.mainTable = QtWidgets.QTableWidget()
         self.mainTable.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
         self.mainLayout.addWidget(self.mainTable, stretch=1)
@@ -104,21 +98,53 @@ class DataViewerDialog(QtWidgets.QDialog):
         self.setWindowTitle(title)
         self.setMinimumSize(500, 300)
         self.show()
-        self.addData(0)
+        self.addData()
 
-    def addData(self, index=None, checkBoxChecked=False):
+    def addData(self):
+        self.mainTable.setColumnCount(len(self.data[0]))
+        self.mainTable.setRowCount(len(self.data) - 1)
+        self.mainTable.setHorizontalHeaderLabels(self.data[0])
+        for row in range(1, len(self.data)):
+            for column in range(len(self.data[row])):
+                self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(self.data[row][column])))
+
+class DataViewerDialog(QtWidgets.QDialog):
+    def __init__(self, dataFrame, title, comboBoxItems, parent=None):
+        super().__init__(parent)
+        self.dataFrame = dataFrame
+        self.mainLayout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.mainLayout)
+        self.dataComboBox = QtWidgets.QComboBox()
+        self.dataComboBox.addItems(comboBoxItems)
+        self.dataComboBox.currentIndexChanged.connect(lambda: self.addData())
+        self.mainLayout.addWidget(self.dataComboBox)
+        self.ignoreNoShowsCheckBox = QtWidgets.QCheckBox(text="Ignore no shows")
+        self.ignoreNoShowsCheckBox.clicked.connect(lambda: self.addData())
+        self.mainLayout.addWidget(self.ignoreNoShowsCheckBox)
+        self.ignoreStopsCheckBox = QtWidgets.QCheckBox(text="Ignore stops and injues")
+        self.ignoreStopsCheckBox.clicked.connect(lambda: self.addData())
+        self.mainLayout.addWidget(self.ignoreStopsCheckBox)
+        self.mainTable = QtWidgets.QTableWidget()
+        self.mainTable.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
+        self.mainLayout.addWidget(self.mainTable, stretch=1)
+        self.buttonBox = QtWidgets.QDialogButtonBox()
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox.accepted.connect(self.accept)
+        self.mainLayout.addWidget(self.buttonBox)
+        self.setWindowTitle(title)
+        self.setMinimumSize(500, 300)
+        self.show()
+        self.addData()
+
+    def addData(self):
         for i in reversed(range(self.mainTable.rowCount())):
             self.mainTable.removeRow(i)
-        if index != None:
-            if checkBoxChecked:
-                data = self.checkedData[index]
-            else:
-                data = self.data[index]
-        else:
-            if self.dataCheckBox.isChecked():
-                data = self.checkedData[self.dataComboBox.currentIndex()]
-            else:
-                data = self.data[self.dataComboBox.currentIndex()]
+        dataFrame = self.dataFrame
+        if self.ignoreNoShowsCheckBox.isChecked():
+            dataFrame = analyzer.getDataFrameWithoutNoShows(dataFrame)
+        if self.ignoreStopsCheckBox.isChecked():
+            dataFrame = analyzer.getDataFrameWithoutRobotStops(dataFrame)
+        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex()))
         self.mainTable.setColumnCount(len(data[0]))
         self.mainTable.setRowCount(len(data) - 1)
         self.mainTable.setHorizontalHeaderLabels(data[0])
@@ -177,19 +203,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setMinimumSize(1200, 600)
         self.setWindowTitle("Scouting Visualization")
         self.showMaximized()
-        file = open("config.json", "r")
-        config = json.loads(file.read())
-        file.close()
         databaseSucessful = False
-        if config["useDatabase"] == True:
-            try:
-                self.dataFrame = analyzer.getDataFrameFromDatabase(config["databaseInfo"]["host"], config["databaseInfo"]["user"], config["databaseInfo"]["password"], config["databaseInfo"]["database"], config["databaseInfo"]["table"])
-            except:
-                result = QtWidgets.QMessageBox.critical(self, "Cannot Connect to Database", "A database connection cannot be established. Do you want to use a CSV file instead?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-                if result != QtWidgets.QMessageBox.Yes:
-                    sys.exit()
-            else:
-                databaseSucessful = True
+        if path.exists("config.json"):
+            file = open("config.json", "r")
+            config = json.loads(file.read())
+            file.close()
+            if config["useDatabase"] == True:
+                try:
+                    self.dataFrame = analyzer.getDataFrameFromDatabase(config["databaseInfo"]["host"], config["databaseInfo"]["user"], config["databaseInfo"]["password"], config["databaseInfo"]["database"], config["databaseInfo"]["table"])
+                except Exception as e:
+                    result = QtWidgets.QMessageBox.critical(self, "Cannot Connect to Database", f"A database connection cannot be established. Do you want to use a CSV file instead?\n\n{str(e)}", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+                    if result != QtWidgets.QMessageBox.Yes:
+                        sys.exit()
+                else:
+                    databaseSucessful = True
         if not databaseSucessful:
             filePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)")[0]
             if filePath != "":
@@ -205,20 +232,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self.addSlider(slider, slider in sliders[1])
         self.updateTeamScores()
         
-    def addTeam(self, teamNumber):
-        teamLabel = TeamLabel(teamNumber, analyzer.getTotalRobotStopsForEachType(self.dataFrame, teamNumber))
+    def addTeam(self, teamNumber, zScore):
+        teamLabel = TeamLabel(teamNumber, zScore, analyzer.getTotalRobotStopsForEachType(self.dataFrame, teamNumber))
         self.teamListLayout.insertWidget(self.teamListLayout.count() - 1, teamLabel)
 
     def showStopDetailsDialog(self, teamNumber):
         data = analyzer.getStopDetails(self.dataFrame, teamNumber)
-        dialog = DataViewerDialog([data], f"{teamNumber}'s Robot Stops and Injures", None, None, None, self)
+        dialog = StopViewerDialog(data, f"{teamNumber}'s Robot Stops, Injures, and No Shows", self)
         dialog.exec()
 
     def showDataViewDialog(self):
-        dataList = [analyzer.getData(self.dataFrame, 0), analyzer.getData(self.dataFrame, 1), analyzer.getData(self.dataFrame, 2), analyzer.getData(self.dataFrame, 3), analyzer.getData(self.dataFrame, 4), analyzer.getData(self.dataFrame, 5), analyzer.getData(self.dataFrame, 6), analyzer.getData(self.dataFrame, 7)]
         comboBoxList = ["Total", "Mean", "Mean (Q1 minimum)", "Median", "Median (Q1 minimum)", "Mode", "Mode (Q1 minimum)", "Max"]
-        dataListWithoutStops = [analyzer.getData(self.dataFrame, 0, True), analyzer.getData(self.dataFrame, 1, True), analyzer.getData(self.dataFrame, 2, True), analyzer.getData(self.dataFrame, 3, True), analyzer.getData(self.dataFrame, 4, True), analyzer.getData(self.dataFrame, 5, True), analyzer.getData(self.dataFrame, 6, True), analyzer.getData(self.dataFrame, 7, True)]
-        dialog = DataViewerDialog(dataList, "Data Viewer", comboBoxList, "Ignore stops and injues", dataListWithoutStops, self)
+        dialog = DataViewerDialog(self.dataFrame, "Data Viewer", comboBoxList, self)
         dialog.exec()
 
     def addSlider(self, key, isCounted):
@@ -236,7 +261,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
         zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues)
         for zScore in zScores:
-            self.addTeam(zScore[0])
+            self.addTeam(zScore[0], zScore[1])
 
     def saveSliders(self):
         filePath = QtWidgets.QFileDialog.getSaveFileName(self, filter="JSON files (*.json)")[0]
@@ -267,7 +292,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         else:
                             valueNotInJson = True
             except Exception as e:
-                QtWidgets.QMessageBox.critical(self, "Error", str(e))
+                QtWidgets.QMessageBox.critical(self, "Error", f"Sliders have been loaded up until the error\n\n{str(e)}")
             if valueNotInJson:
                 QtWidgets.QMessageBox.warning(self, "Warning", "One or more slider values is not in the file")
 
