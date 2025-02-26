@@ -1,6 +1,7 @@
 import mysql.connector
 import pandas
 from io import StringIO
+from math import isnan
 
 CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
@@ -408,6 +409,8 @@ def getTeamZScoreForColumn(dataFrame, frameType, teamNumber, column, ranking):
             zScore = 0
     else:
         zScore = 0
+    if isnan(zScore):
+        zScore = 0
     return zScore * ranking
 
 def getTeamZScoreAccuracyForColumn(dataFrame, teamNumber, column, favorableValue, finalName, ranking):
@@ -421,5 +424,7 @@ def getTeamZScoreAccuracyForColumn(dataFrame, teamNumber, column, favorableValue
         else:
             zScore = 0
     else:
+        zScore = 0
+    if isnan(zScore):
         zScore = 0
     return zScore * ranking
