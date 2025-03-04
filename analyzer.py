@@ -169,7 +169,10 @@ def applyGroupValues(data, columns):
     return sum
 
 def applyAccuracyValues(data, columns):
-    accuracy = data[columns[0]].sum() / data[columns[1]].sum()
+    if data[columns[1]].sum() != 0:
+        accuracy = data[columns[0]].sum() / data[columns[1]].sum()
+    else:
+        accuracy = 0
     return accuracy
 
 def groupValues(dataFrame):
@@ -234,6 +237,13 @@ def getColumnsForZScore(dataFrame, getCountedValues=True):
         return columnsToReturn
     
 def getData(dataFrame, frameType):
+    mainDataFrame = getDataFrame(dataFrame, frameType)
+    for column in COUNTED_VALUES:
+        mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
+    mainDataFrame.sort_values(by=["team_number"])
+    return mainDataFrame
+
+def getDataFrame(dataFrame, frameType):
     if frameType == 0:
         mainDataFrame = getTotalDataFrame(dataFrame)
     elif frameType == 1:
@@ -250,9 +260,6 @@ def getData(dataFrame, frameType):
         mainDataFrame = getModeDataFrameQ1Minimum(dataFrame)
     elif frameType == 7:
         mainDataFrame = getMaxDataFrame(dataFrame)
-    for column in COUNTED_VALUES:
-        mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
-    mainDataFrame.sort_values(by=["team_number"])
     return mainDataFrame
 
 def dataFrameToList(dataFrame):
@@ -367,64 +374,82 @@ def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
 def rankTeamsByZScore(dataFrame, sliderValues):
     teams = getAllTeams(dataFrame)
     teamZScores = {}
+    dataFrameBuffer = [[None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None]]
     for team in teams:
         currentScore = 0
         for column, ranking in sliderValues.items():
-            dataFrameToUse = dataFrame
-            if ranking[2]:
-                dataFrameToUse = getDataFrameWithoutRobotStops(dataFrameToUse)
-            if ranking[3]:
-                dataFrameToUse = getDataFrameWithoutNoShows(dataFrameToUse)
+            if ranking[2] and ranking[3]:
+                if dataFrameBuffer[ranking[0]][3] is None:
+                    dataFrameToGenerate = getDataFrameWithoutNoShows(getDataFrameWithoutRobotStops(dataFrame))
+                    dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0])
+                    dataFrameBuffer[ranking[0]][3] = dataFrameToUse.copy()
+                else:
+                    dataFrameToUse = dataFrameBuffer[ranking[0]][3]
+            elif ranking[3]:
+                if dataFrameBuffer[ranking[0]][2] is None:
+                    dataFrameToGenerate = getDataFrameWithoutNoShows(dataFrame)
+                    dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0])
+                    dataFrameBuffer[ranking[0]][2] = dataFrameToUse.copy()
+                else:
+                    dataFrameToUse = dataFrameBuffer[ranking[0]][2]
+            elif ranking[2]:
+                if dataFrameBuffer[ranking[0]][1] is None:
+                    dataFrameToGenerate = getDataFrameWithoutRobotStops(dataFrame)
+                    dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0])
+                    dataFrameBuffer[ranking[0]][1] = dataFrameToUse.copy()
+                else:
+                    dataFrameToUse = dataFrameBuffer[ranking[0]][1]
+            else:
+                if dataFrameBuffer[ranking[0]][0] is None:
+                    dataFrameToUse = getDataFrame(dataFrame, ranking[0])
+                    dataFrameBuffer[ranking[0]][0] = dataFrameToUse.copy()
+                else:
+                    dataFrameToUse = dataFrameBuffer[ranking[0]][0]
             if column in dataFrame.columns:
-                currentScore += getTeamZScoreForColumn(dataFrameToUse, ranking[0], team, column, ranking[1])
+                currentScore += getTeamZScoreForColumn(dataFrameToUse, team, column, ranking[1])
             elif column in COUNTED_VALUES:
-                currentScore += getTeamZScoreAccuracyForColumn(dataFrameToUse, team, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column, ranking[1])
+                currentScore += getTeamZScoreAccuracyForColumn(dataFrame, team, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column, ranking[1], ranking[2], ranking[3])
         teamZScores[team] = currentScore
     return sorted(teamZScores.items(), key=lambda x: x[1], reverse=True)
 
-def getTeamZScoreForColumn(dataFrame, frameType, teamNumber, column, ranking):
-    if frameType == 0:
-        mainDataFrame = getTotalDataFrame(dataFrame)
-    elif frameType == 1:
-        mainDataFrame = getAverageDataFrame(dataFrame)
-    elif frameType == 2:
-        mainDataFrame = getAverageDataFrameQ1Minimum(dataFrame)
-    elif frameType == 3:
-        mainDataFrame = getMedianDataFrame(dataFrame)
-    elif frameType == 4:
-        mainDataFrame = getMedianDataFrameQ1Minimum(dataFrame)
-    elif frameType == 5:
-        mainDataFrame = getModeDataFrame(dataFrame)
-    elif frameType == 6:
-        mainDataFrame = getModeDataFrameQ1Minimum(dataFrame)
-    elif frameType == 7:
-        mainDataFrame = getMaxDataFrame(dataFrame)
-    if mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][column].shape[0] > 0:
-        rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][column].values.tolist()[0]
-        mean = mainDataFrame[column].mean()
-        standardDeviation = mainDataFrame[column].std()
-        if standardDeviation != 0:
-            zScore = (rawValue - mean) / standardDeviation
+def getTeamZScoreForColumn(dataFrame, teamNumber, column, ranking):
+    if ranking != 0:
+        if dataFrame.loc[(dataFrame["team_number"] == teamNumber)][column].shape[0] > 0:
+            rawValue = dataFrame.loc[(dataFrame["team_number"] == teamNumber)][column].values.tolist()[0]
+            mean = dataFrame[column].mean()
+            standardDeviation = dataFrame[column].std()
+            if standardDeviation != 0:
+                zScore = (rawValue - mean) / standardDeviation
+            else:
+                zScore = 0
         else:
             zScore = 0
+        if isnan(zScore):
+            zScore = 0
+        return zScore * ranking
     else:
-        zScore = 0
-    if isnan(zScore):
-        zScore = 0
-    return zScore * ranking
+        return 0
 
-def getTeamZScoreAccuracyForColumn(dataFrame, teamNumber, column, favorableValue, finalName, ranking):
-    mainDataFrame = getAccuracyDataFrame(dataFrame, column, favorableValue, finalName)
-    if mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][finalName].shape[0] > 0:
-        rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][finalName].values.tolist()[0]
-        mean = mainDataFrame[finalName].mean()
-        standardDeviation = mainDataFrame[finalName].std()
-        if standardDeviation != 0:
-            zScore = (rawValue - mean) / standardDeviation
+def getTeamZScoreAccuracyForColumn(dataFrame, teamNumber, column, favorableValue, finalName, ranking, dropRobotStops, dropNoShows):
+    if ranking != 0:
+        dataFrameToUse = dataFrame
+        if dropRobotStops:
+            dataFrameToUse = getDataFrameWithoutRobotStops(dataFrameToUse)
+        if dropNoShows:
+            dataFrameToUse = getDataFrameWithoutNoShows(dataFrameToUse)
+        mainDataFrame = getAccuracyDataFrame(dataFrameToUse, column, favorableValue, finalName)
+        if mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][finalName].shape[0] > 0:
+            rawValue = mainDataFrame.loc[(mainDataFrame["team_number"] == teamNumber)][finalName].values.tolist()[0]
+            mean = mainDataFrame[finalName].mean()
+            standardDeviation = mainDataFrame[finalName].std()
+            if standardDeviation != 0:
+                zScore = (rawValue - mean) / standardDeviation
+            else:
+                zScore = 0
         else:
             zScore = 0
+        if isnan(zScore):
+            zScore = 0
+        return zScore * ranking
     else:
-        zScore = 0
-    if isnan(zScore):
-        zScore = 0
-    return zScore * ranking
+        return 0
