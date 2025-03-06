@@ -11,6 +11,7 @@ class TeamLabel(QtWidgets.QWidget):
         self.zScore = zScore
         self.setMinimumHeight(50)
         self.mainLayout = QtWidgets.QHBoxLayout()
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setLayout(self.mainLayout)
         if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0:
             self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score; ({', '.join(map(str, robotStops[0]))}) robot stops; ({', '.join(map(str, robotStops[1]))}) robot injures; {robotStops[2]} no shows")
@@ -24,6 +25,20 @@ class TeamLabel(QtWidgets.QWidget):
 
     def showStopDetails(self):
         mainWindow.showStopDetailsDialog(self.teamNumber)
+
+class UnscrollableComboBox(QtWidgets.QComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def wheelEvent(self, *args, **kwargs):
+        pass
+
+class UnscrollableSlider(QtWidgets.QSlider):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def wheelEvent(self, *args, **kwargs):
+        pass
 
 class KeySlider(QtWidgets.QWidget):
     def __init__(self, key, comboBoxAvaliable=True, parent=None):
@@ -45,12 +60,12 @@ class KeySlider(QtWidgets.QWidget):
         self.valueInput.setText("0.0")
         self.valueInput.textEdited.connect(self.textInputValueChanged)
         self.upperLayout.addWidget(self.valueInput)
-        self.typeCombobox = QtWidgets.QComboBox()
+        self.typeCombobox = UnscrollableComboBox()
         self.typeCombobox.addItems(["Total", "Mean", "Mean (Q1 minimum)", "Median", "Median (Q1 minimum)", "Mode", "Mode (Q1 minimum)", "Max"])
         if comboBoxAvaliable:
             self.upperLayout.addWidget(self.typeCombobox)
         self.mainLayout.addWidget(self.upperWidget)
-        self.slider = QtWidgets.QSlider(orientation=QtCore.Qt.Orientation.Horizontal)
+        self.slider = UnscrollableSlider(orientation=QtCore.Qt.Orientation.Horizontal)
         self.slider.valueChanged.connect(self.sliderValueChanged)
         self.slider.setMinimum(-100)
         self.slider.setMaximum(100)
