@@ -65,6 +65,19 @@ class KeySlider(QtWidgets.QWidget):
         if comboBoxAvaliable:
             self.upperLayout.addWidget(self.typeCombobox)
         self.mainLayout.addWidget(self.upperWidget)
+        self.filterWidget = QtWidgets.QWidget()
+        self.filterLayout = QtWidgets.QHBoxLayout()
+        self.filterLayout.addStretch()
+        self.filterTypeComboBox = UnscrollableComboBox()
+        self.filterTypeComboBox.addItems(["No filter", "=", "!=", ">", "<", ">=", "<="])
+        self.filterTypeComboBox.currentIndexChanged.connect(lambda: self.updateFilterIndex())
+        self.filterLayout.addWidget(self.filterTypeComboBox)
+        self.filterValueInput = QtWidgets.QLineEdit(text="0.0")
+        self.filterValueInput.setEnabled(False)
+        self.filterValueInput.setFixedWidth(50)
+        self.filterLayout.addWidget(self.filterValueInput)
+        self.filterWidget.setLayout(self.filterLayout)
+        self.mainLayout.addWidget(self.filterWidget)
         self.slider = UnscrollableSlider(orientation=QtCore.Qt.Orientation.Horizontal)
         self.slider.valueChanged.connect(self.sliderValueChanged)
         self.slider.setMinimum(-100)
@@ -88,14 +101,40 @@ class KeySlider(QtWidgets.QWidget):
     def getValues(self):
         return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100, self.ignoreStopsAndInjuresCheckbox.isChecked(), self.ignoreNoShowsCheckbox.isChecked()]]
     
+    def getFilter(self):
+        if self.filterTypeComboBox.currentIndex() != 0:
+            return [self.key, [self.filterTypeComboBox.currentIndex(), float(self.filterValueInput.text())]]
+        else:
+            return [self.key, [0, 0.0]]
+    
+    def validateFilterValue(self):
+        if self.filterTypeComboBox.currentIndex() != 0:
+            try:
+                float(self.filterValueInput.text())
+            except:
+                return False
+            else:
+                return True
+        else:
+            return True
+    
     def updateValues(self, valueList):
         self.typeCombobox.setCurrentIndex(valueList[0])
         self.slider.setValue(int(valueList[1] * 100))
         self.ignoreStopsAndInjuresCheckbox.setChecked(valueList[2])
         self.ignoreNoShowsCheckbox.setChecked(valueList[3])
+
+    def updateFilter(self, filterList):
+        self.filterTypeComboBox.setCurrentIndex(filterList[0])
+        self.filterValueInput.setText(filterList[1])
     
     def getKey(self):
         return self.key
+    
+    def updateFilterIndex(self):
+        self.filterValueInput.setEnabled(self.filterTypeComboBox.currentIndex() != 0)
+        if self.filterTypeComboBox.currentIndex() == 0:
+            self.filterValueInput.setText("0.0")
     
 class StopViewerDialog(QtWidgets.QDialog):
     def __init__(self, data, title, parent=None):
@@ -124,9 +163,11 @@ class StopViewerDialog(QtWidgets.QDialog):
                 self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(self.data[row][column])))
 
 class DataViewerDialog(QtWidgets.QDialog):
-    def __init__(self, dataFrame, title, comboBoxItems, parent=None):
+    def __init__(self, dataFrame, title, comboBoxItems, matchFilters, teamFilters, parent=None):
         super().__init__(parent)
         self.dataFrame = dataFrame
+        self.matchFilters = matchFilters
+        self.teamFilters = teamFilters
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainLayout)
         self.dataComboBox = QtWidgets.QComboBox()
@@ -159,13 +200,96 @@ class DataViewerDialog(QtWidgets.QDialog):
             dataFrame = analyzer.getDataFrameWithoutNoShows(dataFrame)
         if self.ignoreStopsCheckBox.isChecked():
             dataFrame = analyzer.getDataFrameWithoutRobotStops(dataFrame)
-        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex()))
+        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), self.matchFilters, self.teamFilters))
         self.mainTable.setColumnCount(len(data[0]))
         self.mainTable.setRowCount(len(data) - 1)
         self.mainTable.setHorizontalHeaderLabels(data[0])
         for row in range(1, len(data)):
             for column in range(len(data[row])):
                 self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(data[row][column])))
+
+class FilterPoint(QtWidgets.QWidget):
+    def __init__(self, column, filterList=[0, 0.0], parent=None):
+        super().__init__(parent)
+        self.column = column
+        self.mainLayout = QtWidgets.QHBoxLayout()
+        self.columnLabel = QtWidgets.QLabel(text=self.column)
+        self.mainLayout.addWidget(self.columnLabel, stretch=1)
+        self.filterTypeComboBox = UnscrollableComboBox()
+        self.filterTypeComboBox.addItems(["No filter", "=", "!=", ">", "<", ">=", "<="])
+        self.filterTypeComboBox.setCurrentIndex(filterList[0])
+        self.filterTypeComboBox.currentIndexChanged.connect(lambda: self.updateIndex())
+        self.mainLayout.addWidget(self.filterTypeComboBox)
+        self.filterValueInput = QtWidgets.QLineEdit(text=str(filterList[1]))
+        self.filterValueInput.setFixedWidth(50)
+        self.filterValueInput.setEnabled(self.filterTypeComboBox.currentIndex() != 0)
+        self.mainLayout.addWidget(self.filterValueInput)
+        self.setLayout(self.mainLayout)
+
+    def validateFloat(self):
+        if self.filterTypeComboBox.currentIndex() != 0:
+            try:
+                float(self.filterValueInput.text())
+            except:
+                return False
+            else:
+                return True
+        else:
+            return True
+        
+    def updateIndex(self):
+        self.filterValueInput.setEnabled(self.filterTypeComboBox.currentIndex() != 0)
+        if self.filterTypeComboBox.currentIndex() == 0:
+            self.filterValueInput.setText("0.0")
+
+    def getFilterList(self):
+        return [self.filterTypeComboBox.currentIndex(), float(self.filterValueInput.text())]
+
+class FilterDialog(QtWidgets.QDialog):
+    def __init__(self, filterList, parent=None):
+        super().__init__(parent)
+        self.mainLayout = QtWidgets.QVBoxLayout()
+        self.filterListScrollArea = QtWidgets.QScrollArea()
+        self.filterListScrollArea.setWidgetResizable(True)
+        self.filterListWidget = QtWidgets.QWidget()
+        self.filterListScrollArea.setWidget(self.filterListWidget)
+        self.filterListLayout = QtWidgets.QVBoxLayout()
+        self.filterListLayout.addStretch()
+        self.filterListWidget.setLayout(self.filterListLayout)
+        self.mainLayout.addWidget(self.filterListScrollArea, stretch=1)
+        self.buttonBox = QtWidgets.QDialogButtonBox()
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        self.mainLayout.addWidget(self.buttonBox)
+        self.setLayout(self.mainLayout)
+        self.setWindowTitle("Edit Match Filters")
+        self.setMinimumSize(500, 300)
+        self.show()
+        for column, value in filterList.items():
+            widget = FilterPoint(column, value)
+            self.filterListLayout.insertWidget(self.filterListLayout.count() - 1, widget)
+
+    def validateFloats(self):
+        for i in range(self.filterListLayout.count()):
+            if type(self.filterListLayout.itemAt(i).widget()) == FilterPoint:
+                if not self.filterListLayout.itemAt(i).widget().validateFloat():
+                    return self.filterListLayout.itemAt(i).widget().column
+        return True
+    
+    def accept(self):
+        result = self.validateFloats()
+        if result == True:
+            super().accept()
+        else:
+            QtWidgets.QMessageBox.critical(self, "Error", f"{result} has an invalid value")
+
+    def getFilters(self):
+        filter = {}
+        for i in range(self.filterListLayout.count()):
+            if type(self.filterListLayout.itemAt(i).widget()) == FilterPoint:
+                filter[self.filterListLayout.itemAt(i).widget().column] = self.filterListLayout.itemAt(i).widget().getFilterList()
+        return filter
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
@@ -188,6 +312,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updateSlidersButton = QtWidgets.QPushButton(text="Update rankings")
         self.updateSlidersButton.clicked.connect(self.updateTeamScores)
         self.rightLayout.addWidget(self.updateSlidersButton)
+        self.editFiltersButton = QtWidgets.QPushButton(text="Edit match filters")
+        self.editFiltersButton.clicked.connect(self.editFilters)
+        self.rightLayout.addWidget(self.editFiltersButton)
         self.viewDataButton = QtWidgets.QPushButton(text="View data")
         self.viewDataButton.clicked.connect(self.showDataViewDialog)
         self.rightLayout.addWidget(self.viewDataButton)
@@ -245,6 +372,9 @@ class MainWindow(QtWidgets.QMainWindow):
         sliders = analyzer.getColumnsForZScore(self.dataFrame)
         for slider in sliders[0]:
             self.addSlider(slider, slider in sliders[1])
+        self.filter = {}
+        for column in analyzer.getColumnsForZScore(self.dataFrame, False):
+            self.filter[column] = [0, 0.0]
         self.updateTeamScores()
         
     def addTeam(self, teamNumber, zScore):
@@ -257,8 +387,17 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog.exec()
 
     def showDataViewDialog(self):
+        teamFilters = {}
+        for i in range(self.sliderListLayout.count()):
+            if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
+                if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
+                    filter = self.sliderListLayout.itemAt(i).widget().getFilter()
+                    teamFilters[filter[0]] = filter[1]
+                else:
+                    QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
+                    return None
         comboBoxList = ["Total", "Mean", "Mean (Q1 minimum)", "Median", "Median (Q1 minimum)", "Mode", "Mode (Q1 minimum)", "Max"]
-        dialog = DataViewerDialog(self.dataFrame, "Data Viewer", comboBoxList, self)
+        dialog = DataViewerDialog(self.dataFrame, "Data Viewer", comboBoxList, self.filter, teamFilters, self)
         dialog.exec()
 
     def addSlider(self, key, isCounted):
@@ -267,14 +406,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def updateTeamScores(self):
         sliderValues = {}
+        teamFilters = {}
         for i in range(self.sliderListLayout.count()):
             if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
                 values = self.sliderListLayout.itemAt(i).widget().getValues()
                 sliderValues[values[0]] = values[1]
+                if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
+                    filter = self.sliderListLayout.itemAt(i).widget().getFilter()
+                    teamFilters[filter[0]] = filter[1]
+                else:
+                    QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
+                    return None
         for i in reversed(range(self.teamListLayout.count())):
             if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
                 self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
-        zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues)
+        zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
         for zScore in zScores:
             self.addTeam(zScore[0], zScore[1])
 
@@ -310,6 +456,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtWidgets.QMessageBox.critical(self, "Error", f"Sliders have been loaded up until the error\n\n{str(e)}")
             if valueNotInJson:
                 QtWidgets.QMessageBox.warning(self, "Warning", "One or more slider values is not in the file")
+
+    def editFilters(self):
+        dialog = FilterDialog(self.filter, self)
+        if dialog.exec() == 1:
+            self.filter = dialog.getFilters()
 
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle(QtWidgets.QStyleFactory.create("fusion"))
