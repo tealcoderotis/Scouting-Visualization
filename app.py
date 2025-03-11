@@ -126,7 +126,7 @@ class KeySlider(QtWidgets.QWidget):
 
     def updateFilter(self, filterList):
         self.filterTypeComboBox.setCurrentIndex(filterList[0])
-        self.filterValueInput.setText(filterList[1])
+        self.filterValueInput.setText(str(filterList[1]))
     
     def getKey(self):
         return self.key
@@ -193,20 +193,24 @@ class DataViewerDialog(QtWidgets.QDialog):
         self.addData()
 
     def addData(self):
-        for i in reversed(range(self.mainTable.rowCount())):
-            self.mainTable.removeRow(i)
         dataFrame = self.dataFrame
         if self.ignoreNoShowsCheckBox.isChecked():
             dataFrame = analyzer.getDataFrameWithoutNoShows(dataFrame)
         if self.ignoreStopsCheckBox.isChecked():
             dataFrame = analyzer.getDataFrameWithoutRobotStops(dataFrame)
-        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), self.matchFilters, self.teamFilters))
-        self.mainTable.setColumnCount(len(data[0]))
-        self.mainTable.setRowCount(len(data) - 1)
-        self.mainTable.setHorizontalHeaderLabels(data[0])
-        for row in range(1, len(data)):
-            for column in range(len(data[row])):
-                self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(data[row][column])))
+        try:
+            data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), self.matchFilters, self.teamFilters))
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Error", str(e))
+        else:
+            for i in reversed(range(self.mainTable.rowCount())):
+                self.mainTable.removeRow(i)
+            self.mainTable.setColumnCount(len(data[0]))
+            self.mainTable.setRowCount(len(data) - 1)
+            self.mainTable.setHorizontalHeaderLabels(data[0])
+            for row in range(1, len(data)):
+                for column in range(len(data[row])):
+                    self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(data[row][column])))
 
 class FilterPoint(QtWidgets.QWidget):
     def __init__(self, column, filterList=[0, 0.0], parent=None):
@@ -335,8 +339,10 @@ class MainWindow(QtWidgets.QMainWindow):
         saveSlidersAction.triggered.connect(self.saveSliders)
         fileMenu.addAction(saveSlidersAction)
         loadFiltersAction = QtWidgets.QAction("Load filters", self)
+        loadFiltersAction.triggered.connect(self.loadFilters)
         fileMenu.addAction(loadFiltersAction)
         saveFiltersAction = QtWidgets.QAction("Save filters as", self)
+        saveFiltersAction.triggered.connect(self.saveFilters)
         fileMenu.addAction(saveFiltersAction)
         fileMenu.addSeparator()
         exitAction = QtWidgets.QAction("Exit", self)
@@ -421,12 +427,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                     return None
-        for i in reversed(range(self.teamListLayout.count())):
-            if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
-                self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
-        zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
-        for zScore in zScores:
-            self.addTeam(zScore[0], zScore[1])
+        try:
+            zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Error", str(e))
+        else:
+            for i in reversed(range(self.teamListLayout.count())):
+                if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
+                    self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
+            for zScore in zScores:
+                self.addTeam(zScore[0], zScore[1])
 
     def saveSliders(self):
         filePath = QtWidgets.QFileDialog.getSaveFileName(self, filter="JSON files (*.json)")[0]
@@ -465,6 +475,50 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog = FilterDialog(self.filter, self)
         if dialog.exec() == 1:
             self.filter = dialog.getFilters()
+
+    def saveFilters(self):
+        filePath = QtWidgets.QFileDialog.getSaveFileName(self, filter="JSON files (*.json)")[0]
+        if filePath != "":
+            teamFilters = {}
+            for i in range(self.sliderListLayout.count()):
+                if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
+                    if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
+                        filter = self.sliderListLayout.itemAt(i).widget().getFilter()
+                        teamFilters[filter[0]] = filter[1]
+                    else:
+                        QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
+                        return None
+            finalObject = {
+                "match": self.filter,
+                "team": teamFilters
+            }
+            jsonFile = json.dumps(finalObject)
+            file = open(filePath, "w")
+            file.write(jsonFile)
+            file.close()
+
+    def loadFilters(self):
+        filePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="JSON files (*.json)")[0]
+        if filePath != "":
+            valueNotInJson = False
+            try:
+                file = open(filePath, "r")
+                jsonFile = json.loads(file.read())
+                file.close()
+                self.filter = jsonFile["match"]
+                teamFilter = jsonFile["team"]
+                for i in range(self.sliderListLayout.count()):
+                    if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
+                        slider = self.sliderListLayout.itemAt(i).widget()
+                        if slider.getKey() in teamFilter:
+                            slider.updateFilter(teamFilter[slider.getKey()])
+                        else:
+                            valueNotInJson = True
+
+            except Exception as e:
+                QtWidgets.QMessageBox.critical(self, "Error", f"Filters have been loaded up until the error\n\n{str(e)}")
+            if valueNotInJson:
+                QtWidgets.QMessageBox.warning(self, "Warning", "One or more filters is not in the file")
 
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle(QtWidgets.QStyleFactory.create("fusion"))
