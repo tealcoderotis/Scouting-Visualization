@@ -252,6 +252,18 @@ def filterDataFrame(dataFrame, filters):
                     dataFrame = dataFrame.loc[(dataFrame[column] >= value[1])]
                 if value[0] == 6:
                     dataFrame = dataFrame.loc[(dataFrame[column] <= value[1])]
+                if value[0] == 7:
+                    for index, row in dataFrame.iterrows():
+                        data = row.to_dict()
+                        x = data[column]
+                        passes = None
+                        safeValueList = ["x", "data", "passes"]
+                        safeValues = {}
+                        for safeValue in safeValueList:
+                            safeValues[safeValue] = locals().get(safeValue)
+                        code = compile(value[1], "<string>", "exec")
+                        exec(code, {}, safeValues)
+                        print(safeValues["passes"])
     return dataFrame
 
 def filterTeam(dataFrame, teamNumber, column, filter):
@@ -273,18 +285,16 @@ def filterTeam(dataFrame, teamNumber, column, filter):
     
 def getData(dataFrame, frameType, matchFilter=None, teamFilter=None):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
-    if dataFrame.shape[0] > 0:
-        mainDataFrame = getDataFrame(dataFrame, frameType)
-        for column in COUNTED_VALUES:
-            mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
-        '''for team in getAllTeams(mainDataFrame):
-            for column in mainDataFrame:
-                if not filterTeam(mainDataFrame, team, column, teamFilter[column]):
-                    mainDataFrame.drop(dataFrame.loc[(dataFrame["team_number"] == team)].index, inplace=True)
-                    break'''
-        mainDataFrame.sort_values(by="team_number", inplace=True)
-        return mainDataFrame
-    return dataFrame
+    mainDataFrame = getDataFrame(dataFrame, frameType)
+    for column in COUNTED_VALUES:
+        mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
+    for team in getAllTeams(mainDataFrame):
+        for column in teamFilter:
+            if not filterTeam(mainDataFrame, team, column, teamFilter[column]):
+                mainDataFrame.drop(dataFrame.loc[(dataFrame["team_number"] == team)].index, inplace=True)
+                break
+    mainDataFrame.sort_values(by="team_number", inplace=True)
+    return mainDataFrame
 
 def getDataFrame(dataFrame, frameType):
     if frameType == 0:

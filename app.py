@@ -216,22 +216,33 @@ class FilterPoint(QtWidgets.QWidget):
     def __init__(self, column, filterList=[0, 0.0], parent=None):
         super().__init__(parent)
         self.column = column
+        if type(filterList[1]) == str:
+            self.filterCode = filterList[1]
+        else:
+            self.filterCode = ""
         self.mainLayout = QtWidgets.QHBoxLayout()
         self.columnLabel = QtWidgets.QLabel(text=self.column)
         self.mainLayout.addWidget(self.columnLabel, stretch=1)
         self.filterTypeComboBox = UnscrollableComboBox()
-        self.filterTypeComboBox.addItems(["No filter", "=", "!=", ">", "<", ">=", "<="])
+        self.filterTypeComboBox.addItems(["No filter", "=", "!=", ">", "<", ">=", "<=", "Custom"])
         self.filterTypeComboBox.setCurrentIndex(filterList[0])
         self.filterTypeComboBox.currentIndexChanged.connect(lambda: self.updateIndex())
         self.mainLayout.addWidget(self.filterTypeComboBox)
-        self.filterValueInput = QtWidgets.QLineEdit(text=str(filterList[1]))
+        self.filterValueInput = QtWidgets.QLineEdit()
         self.filterValueInput.setFixedWidth(50)
-        self.filterValueInput.setEnabled(self.filterTypeComboBox.currentIndex() != 0)
+        if type(filterList[1]) == float:
+            self.filterValueInput.setText(str(filterList[1]))
+        else:
+            self.filterValueInput.setText("0.0")
         self.mainLayout.addWidget(self.filterValueInput)
+        self.editCodeButton = QtWidgets.QPushButton(text="Edit code")
+        self.editCodeButton.clicked.connect(self.editCode)
+        self.mainLayout.addWidget(self.editCodeButton)
         self.setLayout(self.mainLayout)
+        self.updateIndex()
 
     def validateFloat(self):
-        if self.filterTypeComboBox.currentIndex() != 0:
+        if not (self.filterTypeComboBox.currentIndex() == 0 or self.filterTypeComboBox.currentIndex() == 7):
             try:
                 float(self.filterValueInput.text())
             except:
@@ -245,9 +256,58 @@ class FilterPoint(QtWidgets.QWidget):
         self.filterValueInput.setEnabled(self.filterTypeComboBox.currentIndex() != 0)
         if self.filterTypeComboBox.currentIndex() == 0:
             self.filterValueInput.setText("0.0")
+        if self.filterTypeComboBox.currentIndex() == 7:
+            self.filterValueInput.setHidden(True)
+            self.editCodeButton.setHidden(False)
+        else:
+            self.editCodeButton.setHidden(True)
+            self.filterValueInput.setHidden(False)
 
     def getFilterList(self):
-        return [self.filterTypeComboBox.currentIndex(), float(self.filterValueInput.text())]
+        if self.filterTypeComboBox.currentIndex() == 7:
+            return [self.filterTypeComboBox.currentIndex(), self.filterCode]
+        else:
+            return [self.filterTypeComboBox.currentIndex(), float(self.filterValueInput.text())]
+        
+    def editCode(self):
+        dialog = CodeDialog(self.filterCode, self)
+        if dialog.exec() == 1:
+            self.filterCode = dialog.code
+        
+class CodeDialog(QtWidgets.QDialog):
+    def __init__(self, currentCode="", parent=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.setWindowTitle("Python Code")
+        self.setMinimumSize(500, 300)
+        self.setWindowModality(True)
+        self.mainLayout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.mainLayout)
+        self.codeInput = QtWidgets.QTextEdit()
+        self.codeInput.setAcceptRichText(False)
+        self.codeInput.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+        self.codeInput.setPlainText(currentCode)
+        self.mainLayout.addWidget(self.codeInput)
+        self.dialogButtons = QtWidgets.QDialogButtonBox()
+        self.dialogButtons.setStandardButtons(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel | QtWidgets.QDialogButtonBox.Open)
+        self.dialogButtons.button(QtWidgets.QDialogButtonBox.Cancel).clicked.connect(self.reject)
+        self.dialogButtons.button(QtWidgets.QDialogButtonBox.Open).clicked.connect(self.getScript)
+        self.dialogButtons.button(QtWidgets.QDialogButtonBox.Ok).clicked.connect(self.accept)
+        self.mainLayout.addWidget(self.dialogButtons)
+        self.show()
+    
+    def accept(self):
+        self.code = self.codeInput.toPlainText()
+        return super().accept()
+    
+    def getScript(self):
+        filePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="Python scripts (*.py)")[0]
+        if filePath != "":
+            try:
+                file = open(filePath, "r")
+                self.codeInput.setPlainText(file.read())
+                file.close()
+            except Exception as e:
+                QtWidgets.QMessageBox.critical(self, "Error", str(e))
 
 class FilterDialog(QtWidgets.QDialog):
     def __init__(self, filterList, parent=None):
@@ -427,16 +487,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                     return None
-        try:
-            zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
-        except Exception as e:
+        '''try:'''
+        zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
+        '''except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Error", str(e))
-        else:
-            for i in reversed(range(self.teamListLayout.count())):
-                if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
-                    self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
-            for zScore in zScores:
-                self.addTeam(zScore[0], zScore[1])
+        else:'''
+        for i in reversed(range(self.teamListLayout.count())):
+            if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
+                self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
+        for zScore in zScores:
+            self.addTeam(zScore[0], zScore[1])
 
     def saveSliders(self):
         filePath = QtWidgets.QFileDialog.getSaveFileName(self, filter="JSON files (*.json)")[0]
