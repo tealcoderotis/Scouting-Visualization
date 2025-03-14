@@ -239,6 +239,7 @@ def getColumnsForZScore(dataFrame, getCountedValues=True):
 def filterDataFrame(dataFrame, filters):
     if filters != None:
         for column, value in filters.items():
+            data = dataFrame.to_dict("list")
             if value[0] != 0 and column in getColumns(dataFrame):
                 if value[0] == 1:
                     dataFrame = dataFrame.loc[(dataFrame[column] == value[1])]
@@ -253,17 +254,30 @@ def filterDataFrame(dataFrame, filters):
                 if value[0] == 6:
                     dataFrame = dataFrame.loc[(dataFrame[column] <= value[1])]
                 if value[0] == 7:
-                    for index, row in dataFrame.iterrows():
-                        data = row.to_dict()
-                        x = data[column]
-                        passes = None
-                        safeValueList = ["x", "data", "passes"]
-                        safeValues = {}
-                        for safeValue in safeValueList:
-                            safeValues[safeValue] = locals().get(safeValue)
-                        code = compile(value[1], "<string>", "exec")
-                        exec(code, {}, safeValues)
-                        print(safeValues["passes"])
+                    for index, rowDataFrame in dataFrame.iterrows():
+                        row = rowDataFrame.to_dict()
+                        rawValue = row[column]
+                        globalValues = {
+                            "input": None,
+                            "print": None,
+                            "data": data,
+                            "row": row,
+                            "value": rawValue
+                        }
+                        localValues = {
+                            "passes": None
+                        }
+                        try:
+                            code = compile(value[1], "<string>", "exec")
+                            exec(code, globalValues, localValues)
+                        except Exception as e:
+                            raise Exception(f"Exception occured within custom filter\n\n{str(e)}")
+                        else:
+                            if type(localValues["passes"]) == bool:
+                                if not localValues["passes"]:
+                                    dataFrame = dataFrame.drop(index)
+                            else:
+                                raise TypeError("Custom filter did not return boolean")
     return dataFrame
 
 def filterTeam(dataFrame, teamNumber, column, filter):

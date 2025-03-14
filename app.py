@@ -285,6 +285,7 @@ class CodeDialog(QtWidgets.QDialog):
         self.codeInput = QtWidgets.QTextEdit()
         self.codeInput.setAcceptRichText(False)
         self.codeInput.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+        self.codeInput.setLineWrapMode(QtWidgets.QTextEdit.NoWrap)
         self.codeInput.setPlainText(currentCode)
         self.mainLayout.addWidget(self.codeInput)
         self.dialogButtons = QtWidgets.QDialogButtonBox()
@@ -487,16 +488,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                     return None
-        '''try:'''
-        zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
-        '''except Exception as e:
+        try:
+            zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
+        except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Error", str(e))
-        else:'''
-        for i in reversed(range(self.teamListLayout.count())):
-            if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
-                self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
-        for zScore in zScores:
-            self.addTeam(zScore[0], zScore[1])
+        else:
+            for i in reversed(range(self.teamListLayout.count())):
+                if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
+                    self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
+            for zScore in zScores:
+                self.addTeam(zScore[0], zScore[1])
 
     def saveSliders(self):
         filePath = QtWidgets.QFileDialog.getSaveFileName(self, filter="JSON files (*.json)")[0]
