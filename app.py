@@ -44,6 +44,7 @@ class KeySlider(QtWidgets.QWidget):
     def __init__(self, key, comboBoxAvaliable=True, parent=None):
         super().__init__(parent)
         self.key = key
+        self.filterCode = ""
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainLayout)
         self.upperWidget = QtWidgets.QWidget()
@@ -69,13 +70,16 @@ class KeySlider(QtWidgets.QWidget):
         self.filterLayout = QtWidgets.QHBoxLayout()
         self.filterLayout.addStretch()
         self.filterTypeComboBox = UnscrollableComboBox()
-        self.filterTypeComboBox.addItems(["No filter", "=", "!=", ">", "<", ">=", "<="])
+        self.filterTypeComboBox.addItems(["No filter", "=", "!=", ">", "<", ">=", "<=", "Custom"])
         self.filterTypeComboBox.currentIndexChanged.connect(lambda: self.updateFilterIndex())
         self.filterLayout.addWidget(self.filterTypeComboBox)
         self.filterValueInput = QtWidgets.QLineEdit(text="0.0")
         self.filterValueInput.setEnabled(False)
         self.filterValueInput.setFixedWidth(50)
         self.filterLayout.addWidget(self.filterValueInput)
+        self.editCodeButton = QtWidgets.QPushButton(text="Edit code")
+        self.editCodeButton.clicked.connect(self.editCode)
+        self.filterLayout.addWidget(self.editCodeButton)
         self.filterWidget.setLayout(self.filterLayout)
         self.mainLayout.addWidget(self.filterWidget)
         self.slider = UnscrollableSlider(orientation=QtCore.Qt.Orientation.Horizontal)
@@ -84,6 +88,7 @@ class KeySlider(QtWidgets.QWidget):
         self.slider.setMaximum(100)
         self.slider.setValue(0)
         self.mainLayout.addWidget(self.slider)
+        self.updateFilterIndex()
     
     def sliderValueChanged(self):
         self.valueInput.setText(str(self.slider.value() / 100))
@@ -102,13 +107,13 @@ class KeySlider(QtWidgets.QWidget):
         return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100, self.ignoreStopsAndInjuresCheckbox.isChecked(), self.ignoreNoShowsCheckbox.isChecked()]]
     
     def getFilter(self):
-        if self.filterTypeComboBox.currentIndex() != 0:
-            return [self.key, [self.filterTypeComboBox.currentIndex(), float(self.filterValueInput.text())]]
+        if self.filterTypeComboBox.currentIndex() == 7:
+            return [self.key, [self.filterTypeComboBox.currentIndex(), self.filterCode]]
         else:
-            return [self.key, [0, 0.0]]
+            return [self.key, [self.filterTypeComboBox.currentIndex(), float(self.filterValueInput.text())]]
     
     def validateFilterValue(self):
-        if self.filterTypeComboBox.currentIndex() != 0:
+        if not (self.filterTypeComboBox.currentIndex() == 0 or self.filterTypeComboBox.currentIndex() == 7):
             try:
                 float(self.filterValueInput.text())
             except:
@@ -126,7 +131,12 @@ class KeySlider(QtWidgets.QWidget):
 
     def updateFilter(self, filterList):
         self.filterTypeComboBox.setCurrentIndex(filterList[0])
-        self.filterValueInput.setText(str(filterList[1]))
+        if type(filterList[1]) == float:
+            self.filterValueInput.setText(str(filterList[1]))
+        else:
+            self.filterCode = filterList[1]
+            self.filterValueInput.setText("0.0")
+        self.updateFilterIndex()
     
     def getKey(self):
         return self.key
@@ -135,6 +145,17 @@ class KeySlider(QtWidgets.QWidget):
         self.filterValueInput.setEnabled(self.filterTypeComboBox.currentIndex() != 0)
         if self.filterTypeComboBox.currentIndex() == 0:
             self.filterValueInput.setText("0.0")
+        if self.filterTypeComboBox.currentIndex() == 7:
+            self.filterValueInput.setHidden(True)
+            self.editCodeButton.setHidden(False)
+        else:
+            self.editCodeButton.setHidden(True)
+            self.filterValueInput.setHidden(False)
+
+    def editCode(self):
+        dialog = CodeDialog(self.filterCode, self)
+        if dialog.exec() == 1:
+            self.filterCode = dialog.code
     
 class StopViewerDialog(QtWidgets.QDialog):
     def __init__(self, data, title, parent=None):
@@ -213,10 +234,11 @@ class DataViewerDialog(QtWidgets.QDialog):
                     self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(data[row][column])))
 
 class FilterPoint(QtWidgets.QWidget):
-    def __init__(self, column, filterList=[0, 0.0], parent=None):
+    def __init__(self, column, filterList=[0, 0.0], isNumber=True, parent=None):
         super().__init__(parent)
         self.column = column
-        if type(filterList[1]) == str:
+        self.isNumber = isNumber
+        if type(filterList[1]) == str and (filterList[0] == 3 or filterList[0] == 7):
             self.filterCode = filterList[1]
         else:
             self.filterCode = ""
@@ -224,13 +246,19 @@ class FilterPoint(QtWidgets.QWidget):
         self.columnLabel = QtWidgets.QLabel(text=self.column)
         self.mainLayout.addWidget(self.columnLabel, stretch=1)
         self.filterTypeComboBox = UnscrollableComboBox()
-        self.filterTypeComboBox.addItems(["No filter", "=", "!=", ">", "<", ">=", "<=", "Custom"])
+        if self.isNumber:
+            self.filterTypeComboBox.addItems(["No filter", "=", "!=", ">", "<", ">=", "<=", "Custom"])
+        else:
+            self.filterTypeComboBox.addItems(["No filter", "=", "!=", "Custom"])
         self.filterTypeComboBox.setCurrentIndex(filterList[0])
         self.filterTypeComboBox.currentIndexChanged.connect(lambda: self.updateIndex())
         self.mainLayout.addWidget(self.filterTypeComboBox)
         self.filterValueInput = QtWidgets.QLineEdit()
-        self.filterValueInput.setFixedWidth(50)
-        if type(filterList[1]) == float:
+        if self.isNumber:
+            self.filterValueInput.setFixedWidth(50)
+        else:
+            self.filterValueInput.setFixedWidth(100)
+        if not self.isInCodeMode():
             self.filterValueInput.setText(str(filterList[1]))
         else:
             self.filterValueInput.setText("0.0")
@@ -242,7 +270,7 @@ class FilterPoint(QtWidgets.QWidget):
         self.updateIndex()
 
     def validateFloat(self):
-        if not (self.filterTypeComboBox.currentIndex() == 0 or self.filterTypeComboBox.currentIndex() == 7):
+        if (not (self.filterTypeComboBox.currentIndex() == 0 or self.isInCodeMode())) and self.isNumber:
             try:
                 float(self.filterValueInput.text())
             except:
@@ -256,7 +284,7 @@ class FilterPoint(QtWidgets.QWidget):
         self.filterValueInput.setEnabled(self.filterTypeComboBox.currentIndex() != 0)
         if self.filterTypeComboBox.currentIndex() == 0:
             self.filterValueInput.setText("0.0")
-        if self.filterTypeComboBox.currentIndex() == 7:
+        if self.isInCodeMode():
             self.filterValueInput.setHidden(True)
             self.editCodeButton.setHidden(False)
         else:
@@ -264,15 +292,26 @@ class FilterPoint(QtWidgets.QWidget):
             self.filterValueInput.setHidden(False)
 
     def getFilterList(self):
-        if self.filterTypeComboBox.currentIndex() == 7:
+        if self.isInCodeMode():
             return [self.filterTypeComboBox.currentIndex(), self.filterCode]
         else:
-            return [self.filterTypeComboBox.currentIndex(), float(self.filterValueInput.text())]
+            if self.isNumber:
+                return [self.filterTypeComboBox.currentIndex(), float(self.filterValueInput.text())]
+            else:
+                return [self.filterTypeComboBox.currentIndex(), self.filterValueInput.text()]
         
     def editCode(self):
         dialog = CodeDialog(self.filterCode, self)
         if dialog.exec() == 1:
             self.filterCode = dialog.code
+
+    def isInCodeMode(self):
+        if self.isNumber and self.filterTypeComboBox.currentIndex() == 7:
+            return True
+        elif (not self.isNumber) and self.filterTypeComboBox.currentIndex() == 3:
+            return True
+        else:
+            return False
         
 class CodeDialog(QtWidgets.QDialog):
     def __init__(self, currentCode="", parent=None, **kwargs):
@@ -311,7 +350,7 @@ class CodeDialog(QtWidgets.QDialog):
                 QtWidgets.QMessageBox.critical(self, "Error", str(e))
 
 class FilterDialog(QtWidgets.QDialog):
-    def __init__(self, filterList, parent=None):
+    def __init__(self, filterList, dataFrame, parent=None):
         super().__init__(parent)
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.filterListScrollArea = QtWidgets.QScrollArea()
@@ -332,7 +371,11 @@ class FilterDialog(QtWidgets.QDialog):
         self.setMinimumSize(500, 300)
         self.show()
         for column, value in filterList.items():
-            widget = FilterPoint(column, value)
+            dataType = analyzer.getDataTypeOfColumn(dataFrame, column)
+            if dataType == "int64" or dataType == "float64":
+                widget = FilterPoint(column, value, True)
+            else:
+                widget = FilterPoint(column, value, False)
             self.filterListLayout.insertWidget(self.filterListLayout.count() - 1, widget)
 
     def validateFloats(self):
@@ -444,7 +487,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for slider in sliders[0]:
             self.addSlider(slider, slider in sliders[1])
         self.filter = {}
-        for column in analyzer.getColumnsForZScore(self.dataFrame, False):
+        for column in analyzer.getColumns(self.dataFrame):
             self.filter[column] = [0, 0.0]
         self.updateTeamScores()
         
@@ -533,7 +576,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtWidgets.QMessageBox.warning(self, "Warning", "One or more slider values is not in the file")
 
     def editFilters(self):
-        dialog = FilterDialog(self.filter, self)
+        dialog = FilterDialog(self.filter, self.dataFrame, self)
         if dialog.exec() == 1:
             self.filter = dialog.getFilters()
 
@@ -608,4 +651,4 @@ palette.setColor(QtGui.QPalette.ToolTipText, QtGui.QColor(0, 0, 0))
 palette.setColor(QtGui.QPalette.PlaceholderText, QtGui.QColor(255, 255, 255, 127))
 app.setPalette(palette)
 mainWindow = MainWindow()
-app.exec()
+sys.exit(app.exec())

@@ -147,6 +147,9 @@ def dropDataTypes(dataFrame):
     csv = dataFrame.drop(0).to_csv(sep=",", index=False)
     return pandas.read_csv(StringIO(csv), sep=",", engine="python")
 
+def getDataTypeOfColumn(dataFrame, column):
+    return dataFrame.dtypes[column]
+
 def applyPointValue(data, ranking):
     return data * ranking
 
@@ -227,7 +230,7 @@ def getColumnsForZScore(dataFrame, getCountedValues=True):
     columnsToReturn = []
     for i in range(len(columns)):
         if columns[i] not in NOT_DATA_COLUMNS:
-            if (dataTypes[i] == "int64" or dataTypes[i] == "float64"):
+            if dataTypes[i] == "int64" or dataTypes[i] == "float64":
                 columnsToReturn.append(columns[i])
     if getCountedValues:
         for column in COUNTED_VALUES:
@@ -241,47 +244,81 @@ def filterDataFrame(dataFrame, filters):
         for column, value in filters.items():
             data = dataFrame.to_dict("list")
             if value[0] != 0 and column in getColumns(dataFrame):
-                if value[0] == 1:
-                    dataFrame = dataFrame.loc[(dataFrame[column] == value[1])]
-                if value[0] == 2:
-                    dataFrame = dataFrame.loc[(dataFrame[column] != value[1])]
-                if value[0] == 3:
-                    dataFrame = dataFrame.loc[(dataFrame[column] > value[1])]
-                if value[0] == 4:
-                    dataFrame = dataFrame.loc[(dataFrame[column] < value[1])]
-                if value[0] == 5:
-                    dataFrame = dataFrame.loc[(dataFrame[column] >= value[1])]
-                if value[0] == 6:
-                    dataFrame = dataFrame.loc[(dataFrame[column] <= value[1])]
-                if value[0] == 7:
-                    for index, rowDataFrame in dataFrame.iterrows():
-                        row = rowDataFrame.to_dict()
-                        rawValue = row[column]
-                        globalValues = {
-                            "input": None,
-                            "print": None,
-                            "data": data,
-                            "row": row,
-                            "value": rawValue
-                        }
-                        localValues = {
-                            "passes": None
-                        }
-                        try:
-                            code = compile(value[1], "<string>", "exec")
-                            exec(code, globalValues, localValues)
-                        except Exception as e:
-                            raise Exception(f"Exception occured within custom filter\n\n{str(e)}")
-                        else:
-                            if type(localValues["passes"]) == bool:
-                                if not localValues["passes"]:
-                                    dataFrame = dataFrame.drop(index)
+                dataType = getDataTypeOfColumn(dataFrame, column)
+                if dataType == "int64" or dataType == "float64":
+                    if value[0] == 1:
+                        dataFrame = dataFrame.loc[(dataFrame[column] == value[1])]
+                    if value[0] == 2:
+                        dataFrame = dataFrame.loc[(dataFrame[column] != value[1])]
+                    if value[0] == 3:
+                        dataFrame = dataFrame.loc[(dataFrame[column] > value[1])]
+                    if value[0] == 4:
+                        dataFrame = dataFrame.loc[(dataFrame[column] < value[1])]
+                    if value[0] == 5:
+                        dataFrame = dataFrame.loc[(dataFrame[column] >= value[1])]
+                    if value[0] == 6:
+                        dataFrame = dataFrame.loc[(dataFrame[column] <= value[1])]
+                    if value[0] == 7:
+                        for index, rowDataFrame in dataFrame.iterrows():
+                            row = rowDataFrame.to_dict()
+                            rawValue = row[column]
+                            globalValues = {
+                                "input": None,
+                                "print": None,
+                                "data": data,
+                                "row": row,
+                                "value": rawValue
+                            }
+                            localValues = {
+                                "passes": None
+                            }
+                            try:
+                                code = compile(value[1], "<string>", "exec")
+                                exec(code, globalValues, localValues)
+                            except Exception as e:
+                                raise Exception(f"Exception occured within custom filter\n\n{str(e)}")
                             else:
-                                raise TypeError("Custom filter did not return boolean")
+                                if type(localValues["passes"]) == bool:
+                                    if not localValues["passes"]:
+                                        dataFrame = dataFrame.drop(index)
+                                else:
+                                    raise TypeError("Custom filter did not return boolean")
+                else:
+                    if value[0] == 1:
+                        dataFrame = dataFrame.loc[(dataFrame[column] == value[1])]
+                    if value[0] == 2:
+                        dataFrame = dataFrame.loc[(dataFrame[column] != value[1])]
+                    if value[0] == 3:
+                        for index, rowDataFrame in dataFrame.iterrows():
+                            row = rowDataFrame.to_dict()
+                            rawValue = row[column]
+                            globalValues = {
+                                "input": None,
+                                "print": None,
+                                "data": data,
+                                "row": row,
+                                "value": rawValue
+                            }
+                            localValues = {
+                                "passes": None
+                            }
+                            try:
+                                code = compile(value[1], "<string>", "exec")
+                                exec(code, globalValues, localValues)
+                            except Exception as e:
+                                raise Exception(f"Exception occured within custom filter\n\n{str(e)}")
+                            else:
+                                if type(localValues["passes"]) == bool:
+                                    if not localValues["passes"]:
+                                        dataFrame = dataFrame.drop(index)
+                                else:
+                                    raise TypeError("Custom filter did not return boolean")
     return dataFrame
 
 def filterTeam(dataFrame, teamNumber, column, filter):
-    value = dataFrame.loc[(dataFrame["team_number"] == teamNumber)][column].values.tolist()[0]
+    data = dataFrame.to_dict("list")
+    row = dataFrame.loc[(dataFrame["team_number"] == teamNumber)].to_dict("records")[0]
+    value = row[column]
     if filter[0] == 1:
         return value == filter[1]
     if filter[0] == 2:
@@ -294,6 +331,27 @@ def filterTeam(dataFrame, teamNumber, column, filter):
         return value >= filter[1]
     if filter[0] == 6:
         return value <= filter[1]
+    if filter[0] == 7:
+        globalValues = {
+            "input": None,
+            "print": None,
+            "data": data,
+            "row": row,
+            "value": value
+        }
+        localValues = {
+            "passes": None
+        }
+        try:
+            code = compile(filter[1], "<string>", "exec")
+            exec(code, globalValues, localValues)
+        except Exception as e:
+            raise Exception(f"Exception occured within custom filter\n\n{str(e)}")
+        else:
+            if type(localValues["passes"]) == bool:
+                return localValues["passes"]
+            else:
+                raise TypeError("Custom filter did not returan boolen")
     else:
         return True
     
