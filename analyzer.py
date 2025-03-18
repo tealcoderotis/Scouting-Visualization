@@ -267,7 +267,8 @@ def filterDataFrame(dataFrame, filters):
                                 "print": None,
                                 "data": data,
                                 "row": row,
-                                "value": rawValue
+                                "value": rawValue,
+                                "column": column
                             }
                             localValues = {
                                 "passes": None
@@ -297,7 +298,8 @@ def filterDataFrame(dataFrame, filters):
                                 "print": None,
                                 "data": data,
                                 "row": row,
-                                "value": rawValue
+                                "value": rawValue,
+                                "column": column
                             }
                             localValues = {
                                 "passes": None
@@ -337,7 +339,8 @@ def filterTeam(dataFrame, teamNumber, column, filter):
             "print": None,
             "data": data,
             "row": row,
-            "value": value
+            "value": value,
+            "column": column
         }
         localValues = {
             "passes": None
