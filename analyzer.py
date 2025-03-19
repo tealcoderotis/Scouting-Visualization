@@ -1,7 +1,7 @@
 import mysql.connector
 import pandas
 from io import StringIO
-from math import isnan
+from math import isnan, nan
 
 CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
@@ -54,7 +54,7 @@ COUNTED_VALUES = {
         "favorableValue": "deep_climb"
     }
 }
-NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "round_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition"]
+NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "round_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance"]
 POINT_VALUES = {
     "auto_leave_points": {
         "column": "auto_leave",
@@ -133,6 +133,11 @@ def mergePointDataFrame(dataFrame, pointDataFrame):
         dataFrame[f"{column}_points"] = pointDataFrame[column]
     return dataFrame
 
+def dropNaN(dataFrame):
+    for column in getColumns(dataFrame):
+        dataFrame[column] = dataFrame[column].dropna()
+    return dataFrame
+
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
@@ -151,10 +156,16 @@ def getDataTypeOfColumn(dataFrame, column):
     return dataFrame.dtypes[column]
 
 def applyPointValue(data, ranking):
-    return data * ranking
+    if not isnan(data) or data == None:
+        return data * ranking
+    else:
+        return nan
 
 def applyPointValueFromDropdown(data, dropdown, ranking):
-    return ranking[dropdown.index(data)]
+    if data == None:
+        return ranking[dropdown.index(data)]
+    else:
+        return nan
 
 def pointValues(dataFrame):
     for key, value in POINT_VALUES.items():
@@ -217,7 +228,7 @@ def getTotalRobotStopsForEachType(dataFrame, teamNumber):
 
 def getStopDetails(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
-    teamDataFrame = teamDataFrame.sort_values(by=["timestamp"])
+    teamDataFrame = teamDataFrame.sort_values(by=["round_number"])
     robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0]) | (dataFrame["no_show"]  != 0)][["timestamp", "round_number", "robot_stop", "robot_injure", "no_show"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
 
@@ -493,9 +504,12 @@ def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
     for i in range(len(teams)):
         teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
         newDataFrame.loc[i, "team_number"] = teams[i]
-        totalValues = teamDataFrame[column].shape[0]
+        totalValues = teamDataFrame[column].dropna().shape[0]
         favorableValues = teamDataFrame.loc[(dataFrame[column] == favorableColumn)].shape[0]
-        accuracy = favorableValues / totalValues
+        if totalValues == 0:
+            accuracy = nan
+        else:
+            accuracy = favorableValues / totalValues
         newDataFrame.loc[i, finalName] = accuracy
     return newDataFrame
 
@@ -583,10 +597,13 @@ def getTeamZScoreForColumn(dataFrame, teamNumber, column, ranking):
     if ranking != 0:
         if dataFrame.loc[(dataFrame["team_number"] == teamNumber)][column].shape[0] > 0:
             rawValue = dataFrame.loc[(dataFrame["team_number"] == teamNumber)][column].values.tolist()[0]
-            mean = dataFrame[column].mean()
-            standardDeviation = dataFrame[column].std()
-            if standardDeviation != 0:
-                zScore = (rawValue - mean) / standardDeviation
+            if rawValue != nan:
+                mean = dataFrame[column].mean()
+                standardDeviation = dataFrame[column].std()
+                if standardDeviation != 0:
+                    zScore = (rawValue - mean) / standardDeviation
+                else:
+                    zScore = 0
             else:
                 zScore = 0
         else:
