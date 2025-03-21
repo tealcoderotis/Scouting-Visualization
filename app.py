@@ -13,14 +13,14 @@ class TeamLabel(QtWidgets.QWidget):
         self.mainLayout = QtWidgets.QHBoxLayout()
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setLayout(self.mainLayout)
-        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0:
-            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score; ({', '.join(map(str, robotStops[0]))}) robot stops; ({', '.join(map(str, robotStops[1]))}) robot injures; {robotStops[2]} no shows")
+        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0 or robotStops[3] != 0:
+            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score; ({', '.join(map(str, robotStops[0]))}) robot stops; ({', '.join(map(str, robotStops[1]))}) robot injures; {robotStops[3]} defense matches; {robotStops[2]} no shows")
         else:
             self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score")
         self.mainLayout.addWidget(self.teamNumberLabel, stretch=1)
         self.viewStopDetaisButton = QtWidgets.QPushButton(text="View timeline")
         self.viewStopDetaisButton.clicked.connect(self.showStopDetails)
-        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0:
+        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0 or robotStops[3] != 0:
             self.mainLayout.addWidget(self.viewStopDetaisButton)
 
     def showStopDetails(self):
@@ -234,10 +234,10 @@ class DataViewerDialog(QtWidgets.QDialog):
                     self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(data[row][column])))
 
 class FilterPoint(QtWidgets.QWidget):
-    def __init__(self, column, filterList=[0, 0.0], isNumber=True, parent=None):
+    def __init__(self, column, filterList=[0, 0.0], dataType="number", parent=None):
         super().__init__(parent)
         self.column = column
-        self.isNumber = isNumber
+        self.dataType = dataType
         if type(filterList[1]) == str and (filterList[0] == 3 or filterList[0] == 7):
             self.filterCode = filterList[1]
         else:
@@ -246,7 +246,7 @@ class FilterPoint(QtWidgets.QWidget):
         self.columnLabel = QtWidgets.QLabel(text=self.column)
         self.mainLayout.addWidget(self.columnLabel, stretch=1)
         self.filterTypeComboBox = UnscrollableComboBox()
-        if self.isNumber:
+        if self.dataType == "number":
             self.filterTypeComboBox.addItems(["No filter", "=", "!=", ">", "<", ">=", "<=", "Custom"])
         else:
             self.filterTypeComboBox.addItems(["No filter", "=", "!=", "Custom"])
@@ -254,7 +254,7 @@ class FilterPoint(QtWidgets.QWidget):
         self.filterTypeComboBox.currentIndexChanged.connect(lambda: self.updateIndex())
         self.mainLayout.addWidget(self.filterTypeComboBox)
         self.filterValueInput = QtWidgets.QLineEdit()
-        if self.isNumber:
+        if self.dataType == "number":
             self.filterValueInput.setFixedWidth(50)
         else:
             self.filterValueInput.setFixedWidth(100)
@@ -263,6 +263,12 @@ class FilterPoint(QtWidgets.QWidget):
         else:
             self.filterValueInput.setText("0.0")
         self.mainLayout.addWidget(self.filterValueInput)
+        self.filterBooleanComboBox = QtWidgets.QComboBox()
+        self.filterBooleanComboBox.addItems(["False", "True"])
+        self.filterBooleanComboBox.setFixedWidth(100)
+        if not self.isInCodeMode() and self.dataType == "boolean":
+            self.filterBooleanComboBox.setCurrentIndex(int(filterList[1]))
+        self.mainLayout.addWidget(self.filterBooleanComboBox)
         self.editCodeButton = QtWidgets.QPushButton(text="Edit code")
         self.editCodeButton.clicked.connect(self.editCode)
         self.mainLayout.addWidget(self.editCodeButton)
@@ -270,7 +276,7 @@ class FilterPoint(QtWidgets.QWidget):
         self.updateIndex()
 
     def validateFloat(self):
-        if (not (self.filterTypeComboBox.currentIndex() == 0 or self.isInCodeMode())) and self.isNumber:
+        if (not (self.filterTypeComboBox.currentIndex() == 0 or self.isInCodeMode())) and self.dataType == "number":
             try:
                 float(self.filterValueInput.text())
             except:
@@ -282,21 +288,31 @@ class FilterPoint(QtWidgets.QWidget):
         
     def updateIndex(self):
         self.filterValueInput.setEnabled(self.filterTypeComboBox.currentIndex() != 0)
+        self.filterBooleanComboBox.setEnabled(self.filterTypeComboBox.currentIndex() != 0)
         if self.filterTypeComboBox.currentIndex() == 0:
             self.filterValueInput.setText("0.0")
+            self.filterBooleanComboBox.setCurrentIndex(0)
         if self.isInCodeMode():
             self.filterValueInput.setHidden(True)
+            self.filterBooleanComboBox.setHidden(True)
             self.editCodeButton.setHidden(False)
         else:
             self.editCodeButton.setHidden(True)
-            self.filterValueInput.setHidden(False)
+            if self.dataType == "boolean":
+                self.filterValueInput.setHidden(True)
+                self.filterBooleanComboBox.setHidden(False)
+            else:
+                self.filterBooleanComboBox.setHidden(True)
+                self.filterValueInput.setHidden(False)
 
     def getFilterList(self):
         if self.isInCodeMode():
             return [self.filterTypeComboBox.currentIndex(), self.filterCode]
         else:
-            if self.isNumber:
+            if self.dataType == "number":
                 return [self.filterTypeComboBox.currentIndex(), float(self.filterValueInput.text())]
+            elif self.dataType == "boolean":
+                return [self.filterTypeComboBox.currentIndex(), bool(self.filterBooleanComboBox.currentIndex())]
             else:
                 return [self.filterTypeComboBox.currentIndex(), self.filterValueInput.text()]
         
@@ -306,9 +322,9 @@ class FilterPoint(QtWidgets.QWidget):
             self.filterCode = dialog.code
 
     def isInCodeMode(self):
-        if self.isNumber and self.filterTypeComboBox.currentIndex() == 7:
+        if self.dataType == "number" and self.filterTypeComboBox.currentIndex() == 7:
             return True
-        elif (not self.isNumber) and self.filterTypeComboBox.currentIndex() == 3:
+        elif self.dataType != "number" and self.filterTypeComboBox.currentIndex() == 3:
             return True
         else:
             return False
@@ -373,9 +389,11 @@ class FilterDialog(QtWidgets.QDialog):
         for column, value in filterList.items():
             dataType = analyzer.getDataTypeOfColumn(dataFrame, column)
             if dataType == "int64" or dataType == "float64":
-                widget = FilterPoint(column, value, True)
+                widget = FilterPoint(column, value, "number")
+            elif dataType == "bool":
+                widget = FilterPoint(column, value, "boolean")
             else:
-                widget = FilterPoint(column, value, False)
+                widget = FilterPoint(column, value, "string")
             self.filterListLayout.insertWidget(self.filterListLayout.count() - 1, widget)
 
     def validateFloats(self):

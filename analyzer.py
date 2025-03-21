@@ -54,7 +54,7 @@ COUNTED_VALUES = {
         "favorableValue": "deep_climb"
     }
 }
-NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "round_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance"]
+NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance", "played_defense"]
 POINT_VALUES = {
     "auto_leave_points": {
         "column": "auto_leave",
@@ -121,12 +121,14 @@ def getDatabaseData(host, user, password, database, table):
     cursor.execute(f"SHOW COLUMNS FROM {database}.{table}")
     columnData = cursor.fetchall()
     columnNames = []
+    dataTypes = []
     for i in columnData:
         columnNames.append(i[0])
+        dataTypes.append(i[1])
     cursor.execute(f"SELECT * FROM {database}.{table};")
     db.close()
     tableData = cursor.fetchall()
-    return [columnNames, tableData]
+    return [columnNames, tableData, dataTypes]
 
 def mergePointDataFrame(dataFrame, pointDataFrame):
     for column in getColumns(pointDataFrame):
@@ -141,16 +143,27 @@ def dropNaN(dataFrame):
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    return accuracyValues(groupValues(pointValues(dataFrame)))
+    return accuracyValues(groupValues(pointValues(tinyIntToBoolean(dataFrame, data[2]))))
+
+def applyTinyIntToBoolean(data):
+    return bool(data)
+
+def tinyIntToBoolean(dataFrame, dataTypes):
+    columns = getColumns(dataFrame)
+    for i in range(len(columns)):
+        if dataTypes[i] == "tinyint(1)":
+            dataFrame[columns[i]] = dataFrame[columns[i]].apply(applyTinyIntToBoolean)
+    return dataFrame
 
 def getDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
-    dataFrame = dropDataTypes(dataFrame)
-    return accuracyValues(groupValues(pointValues(dataFrame)))
+    dataFrame, dataTypes = dropDataTypes(dataFrame)
+    return accuracyValues(groupValues(pointValues(tinyIntToBoolean(dataFrame, dataTypes))))
 
 def dropDataTypes(dataFrame):
+    types = dataFrame.iloc[0].values.tolist()
     csv = dataFrame.drop(0).to_csv(sep=",", index=False)
-    return pandas.read_csv(StringIO(csv), sep=",", engine="python")
+    return pandas.read_csv(StringIO(csv), sep=",", engine="python"), types
 
 def getDataTypeOfColumn(dataFrame, column):
     return dataFrame.dtypes[column]
@@ -202,7 +215,7 @@ def accuracyValues(dataFrame):
     return dataFrame
 
 def getAllTeams(dataFrame):
-    return dataFrame["team_number"].drop_duplicates().to_list()
+    return sorted(dataFrame["team_number"].drop_duplicates().to_list())
 
 def getDataFrameForTeam(dataFrame, teamNumber):
     return dataFrame[dataFrame["team_number"].values == teamNumber]
@@ -223,13 +236,14 @@ def getTotalRobotStopsForEachType(dataFrame, teamNumber):
     for i in range(1, len(ROBOT_INJURE_VALUES)):
         robotStops = teamDataFrame.loc[(dataFrame["robot_injure"] == ROBOT_INJURE_VALUES[i])].shape[0]
         injureList.append(robotStops)
-    noShows = teamDataFrame.loc[(dataFrame["no_show"] == 1)].shape[0]
-    return [stopList, injureList, noShows]
+    noShows = teamDataFrame.loc[(dataFrame["no_show"] != False)].shape[0]
+    defenseMatches = teamDataFrame.loc[(dataFrame["played_defense"] != False)].shape[0]
+    return [stopList, injureList, noShows, defenseMatches]
 
 def getStopDetails(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
-    teamDataFrame = teamDataFrame.sort_values(by=["round_number"])
-    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0]) | (dataFrame["no_show"]  != 0)][["timestamp", "round_number", "robot_stop", "robot_injure", "no_show"]]
+    teamDataFrame = teamDataFrame.sort_values(by=["match_number"])
+    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0]) | (dataFrame["no_show"]  != False) | (dataFrame["played_defense"] != False)][["timestamp", "match_number", "robot_stop", "robot_injure",  "played_defense", "no_show"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
 
 def getColumns(dataFrame):

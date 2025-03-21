@@ -1,10 +1,10 @@
 {
-    "useDatabase": false,
+    "useDatabase": true,
     "databaseInfo": {
         "host": "localhost",
         "user": "root",
         "password": "orfscouting789",
-        "database": "scouting_database",
-        "table": "default"
+        "database": "exampleDatabase",
+        "table": "testTable"
     }
 }
