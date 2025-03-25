@@ -52,20 +52,29 @@ class KeySlider(QtWidgets.QWidget):
         self.upperWidget.setLayout(self.upperLayout)
         self.keyLabel = QtWidgets.QLabel(text=self.key)
         self.upperLayout.addWidget(self.keyLabel, stretch=1)
-        self.ignoreNoShowsCheckbox = QtWidgets.QCheckBox(text="Ignore no shows")
-        self.upperLayout.addWidget(self.ignoreNoShowsCheckbox)
-        self.ignoreStopsAndInjuresCheckbox = QtWidgets.QCheckBox(text="Ignore stops and injures")
-        self.upperLayout.addWidget(self.ignoreStopsAndInjuresCheckbox)
         self.valueInput = QtWidgets.QLineEdit()
         self.valueInput.setFixedWidth(50)
         self.valueInput.setText("0.0")
         self.valueInput.textEdited.connect(self.textInputValueChanged)
         self.upperLayout.addWidget(self.valueInput)
         self.typeCombobox = UnscrollableComboBox()
-        self.typeCombobox.addItems(["Total", "Mean", "Mean (Q1 minimum)", "Median", "Median (Q1 minimum)", "Mode", "Mode (Q1 minimum)", "Max"])
+        self.typeCombobox.addItems(["Total", "Mean", "Median", "Mode", "Max"])
         if comboBoxAvaliable:
             self.upperLayout.addWidget(self.typeCombobox)
         self.mainLayout.addWidget(self.upperWidget)
+        self.checkBoxWidget = QtWidgets.QWidget()
+        self.checkBoxLayout = QtWidgets.QHBoxLayout()
+        self.checkBoxLayout.addStretch()
+        self.ignoreNoShowsCheckbox = QtWidgets.QCheckBox(text="Ignore no shows")
+        self.checkBoxLayout.addWidget(self.ignoreNoShowsCheckbox)
+        self.ignoreStopsAndInjuresCheckbox = QtWidgets.QCheckBox(text="Ignore stops and injures")
+        self.checkBoxLayout.addWidget(self.ignoreStopsAndInjuresCheckbox)
+        self.q1MinimumCheckBox = QtWidgets.QCheckBox(text="Q1 Minimum")
+        self.checkBoxLayout.addWidget(self.q1MinimumCheckBox)
+        self.q3MaximumCheckBox = QtWidgets.QCheckBox(text="Q3 Maximum")
+        self.checkBoxLayout.addWidget(self.q3MaximumCheckBox)
+        self.checkBoxWidget.setLayout(self.checkBoxLayout)
+        self.mainLayout.addWidget(self.checkBoxWidget)
         self.filterWidget = QtWidgets.QWidget()
         self.filterLayout = QtWidgets.QHBoxLayout()
         self.filterLayout.addStretch()
@@ -104,7 +113,7 @@ class KeySlider(QtWidgets.QWidget):
             pass
 
     def getValues(self):
-        return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100, self.ignoreStopsAndInjuresCheckbox.isChecked(), self.ignoreNoShowsCheckbox.isChecked()]]
+        return [self.key, [self.typeCombobox.currentIndex(), self.slider.value() / 100, self.ignoreStopsAndInjuresCheckbox.isChecked(), self.ignoreNoShowsCheckbox.isChecked(), self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()]]
     
     def getFilter(self):
         if self.filterTypeComboBox.currentIndex() == 7:
@@ -128,6 +137,8 @@ class KeySlider(QtWidgets.QWidget):
         self.slider.setValue(int(valueList[1] * 100))
         self.ignoreStopsAndInjuresCheckbox.setChecked(valueList[2])
         self.ignoreNoShowsCheckbox.setChecked(valueList[3])
+        self.q1MinimumCheckBox.setChecked(valueList[4])
+        self.q3MaximumCheckBox.setChecked(valueList[5])
 
     def updateFilter(self, filterList):
         self.filterTypeComboBox.setCurrentIndex(filterList[0])
@@ -201,6 +212,12 @@ class DataViewerDialog(QtWidgets.QDialog):
         self.ignoreStopsCheckBox = QtWidgets.QCheckBox(text="Ignore stops and injues")
         self.ignoreStopsCheckBox.clicked.connect(lambda: self.addData())
         self.mainLayout.addWidget(self.ignoreStopsCheckBox)
+        self.q1MinimumCheckBox = QtWidgets.QCheckBox(text="Q1 Minimum")
+        self.q1MinimumCheckBox.clicked.connect(lambda: self.addData())
+        self.mainLayout.addWidget(self.q1MinimumCheckBox)
+        self.q3MaximumCheckBox = QtWidgets.QCheckBox(text="Q3 Maximum")
+        self.q3MaximumCheckBox.clicked.connect(lambda: self.addData())
+        self.mainLayout.addWidget(self.q3MaximumCheckBox)
         self.mainTable = QtWidgets.QTableWidget()
         self.mainTable.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
         self.mainLayout.addWidget(self.mainTable, stretch=1)
@@ -220,7 +237,7 @@ class DataViewerDialog(QtWidgets.QDialog):
         if self.ignoreStopsCheckBox.isChecked():
             dataFrame = analyzer.getDataFrameWithoutRobotStops(dataFrame)
         try:
-            data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), self.matchFilters, self.teamFilters))
+            data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), self.matchFilters, self.teamFilters, self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()))
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Error", str(e))
         else:
@@ -528,7 +545,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                     return None
-        comboBoxList = ["Total", "Mean", "Mean (Q1 minimum)", "Median", "Median (Q1 minimum)", "Mode", "Mode (Q1 minimum)", "Max"]
+        comboBoxList = ["Total", "Mean", "Median", "Mode", "Max"]
         dialog = DataViewerDialog(self.dataFrame, "Data Viewer", comboBoxList, self.filter, teamFilters, self)
         dialog.exec()
 

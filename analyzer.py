@@ -175,7 +175,7 @@ def applyPointValue(data, ranking):
         return nan
 
 def applyPointValueFromDropdown(data, dropdown, ranking):
-    if data == None:
+    if data != None:
         return ranking[dropdown.index(data)]
     else:
         return nan
@@ -383,9 +383,9 @@ def filterTeam(dataFrame, teamNumber, column, filter):
     else:
         return True
     
-def getData(dataFrame, frameType, matchFilter=None, teamFilter=None):
+def getData(dataFrame, frameType, matchFilter=None, teamFilter=None, q1MinimumFilter=False, q3MaximumFilter=False):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
-    mainDataFrame = getDataFrame(dataFrame, frameType)
+    mainDataFrame = getDataFrame(dataFrame, frameType, q1MinimumFilter, q3MaximumFilter)
     for column in COUNTED_VALUES:
         mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
     for team in getAllTeams(mainDataFrame):
@@ -396,29 +396,23 @@ def getData(dataFrame, frameType, matchFilter=None, teamFilter=None):
     mainDataFrame.sort_values(by="team_number", inplace=True)
     return mainDataFrame
 
-def getDataFrame(dataFrame, frameType):
+def getDataFrame(dataFrame, frameType, q1MinimumFilter=False, q3MaximumFilter=False):
     if frameType == 0:
-        mainDataFrame = getTotalDataFrame(dataFrame)
+        mainDataFrame = getTotalDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 1:
-        mainDataFrame = getAverageDataFrame(dataFrame)
+        mainDataFrame = getAverageDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 2:
-        mainDataFrame = getAverageDataFrameQ1Minimum(dataFrame)
+        mainDataFrame = getMedianDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 3:
-        mainDataFrame = getMedianDataFrame(dataFrame)
+        mainDataFrame = getModeDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 4:
-        mainDataFrame = getMedianDataFrameQ1Minimum(dataFrame)
-    elif frameType == 5:
-        mainDataFrame = getModeDataFrame(dataFrame)
-    elif frameType == 6:
-        mainDataFrame = getModeDataFrameQ1Minimum(dataFrame)
-    elif frameType == 7:
-        mainDataFrame = getMaxDataFrame(dataFrame)
+        mainDataFrame = getMaxDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     return mainDataFrame
 
 def dataFrameToList(dataFrame):
     return [getColumns(dataFrame)] + dataFrame.values.tolist()
 
-def getTotalDataFrame(dataFrame):
+def getTotalDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
     allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
@@ -426,10 +420,17 @@ def getTotalDataFrame(dataFrame):
         teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
         newDataFrame.loc[i, "team_number"] = teams[i]
         for column in allColumns:
-            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].sum()
+            dataFrameToUse = teamDataFrame.copy()
+            firstQuartile = dataFrameToUse[column].quantile(0.25)
+            thirdQuartile = dataFrameToUse[column].quantile(0.75)
+            if q1MinimumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] >= firstQuartile)]
+            if q3MaximumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] <= thirdQuartile)]
+            newDataFrame.loc[newDataFrame.index[i], column] = dataFrameToUse[column].sum()
     return newDataFrame
 
-def getAverageDataFrame(dataFrame):
+def getAverageDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
     allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
@@ -437,10 +438,57 @@ def getAverageDataFrame(dataFrame):
         teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
         newDataFrame.loc[i, "team_number"] = teams[i]
         for column in allColumns:
-            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].mean()
+            dataFrameToUse = teamDataFrame.copy()
+            firstQuartile = dataFrameToUse[column].quantile(0.25)
+            thirdQuartile = dataFrameToUse[column].quantile(0.75)
+            if q1MinimumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] >= firstQuartile)]
+            if q3MaximumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] <= thirdQuartile)]
+            newDataFrame.loc[newDataFrame.index[i], column] = dataFrameToUse[column].mean()
+    return newDataFrame
+
+def getMedianDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
+    allColumns = getColumnsForZScore(dataFrame, False)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame()
+    for i in range(len(teams)):
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            dataFrameToUse = teamDataFrame.copy()
+            firstQuartile = dataFrameToUse[column].quantile(0.25)
+            thirdQuartile = dataFrameToUse[column].quantile(0.75)
+            if q1MinimumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] >= firstQuartile)]
+            if q3MaximumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] <= thirdQuartile)]
+            newDataFrame.loc[newDataFrame.index[i], column] = dataFrameToUse[column].median()
+    return newDataFrame
+
+def getModeDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
+    allColumns = getColumnsForZScore(dataFrame, False)
+    teams = getAllTeams(dataFrame)
+    newDataFrame = pandas.DataFrame()
+    for i in range(len(teams)):
+        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
+        newDataFrame.loc[i, "team_number"] = teams[i]
+        for column in allColumns:
+            dataFrameToUse = teamDataFrame.copy()
+            firstQuartile = dataFrameToUse[column].quantile(0.25)
+            thirdQuartile = dataFrameToUse[column].quantile(0.75)
+            if q1MinimumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] >= firstQuartile)]
+            if q3MaximumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] <= thirdQuartile)]
+            modes = dataFrameToUse[column].mode().to_list()
+            if len(modes) > 0:
+                newDataFrame.loc[newDataFrame.index[i], column] = modes[0]
+            else:
+                newDataFrame.loc[newDataFrame.index[i], column] = nan
     return newDataFrame
     
-def getAverageDataFrameQ1Minimum(dataFrame):
+def getMaxDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
     allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
@@ -448,68 +496,14 @@ def getAverageDataFrameQ1Minimum(dataFrame):
         teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
         newDataFrame.loc[i, "team_number"] = teams[i]
         for column in allColumns:
-            columnQuartile = teamDataFrame[column].quantile(0.25)
-            filteredColumn = teamDataFrame.loc[(dataFrame[column] >= columnQuartile)][column]
-            newDataFrame.loc[newDataFrame.index[i], column] = filteredColumn.mean()
-    return newDataFrame
-
-def getMedianDataFrame(dataFrame):
-    allColumns = getColumnsForZScore(dataFrame, False)
-    teams = getAllTeams(dataFrame)
-    newDataFrame = pandas.DataFrame()
-    for i in range(len(teams)):
-        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
-        newDataFrame.loc[i, "team_number"] = teams[i]
-        for column in allColumns:
-            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].median()
-    return newDataFrame
-
-def getMedianDataFrameQ1Minimum(dataFrame):
-    allColumns = getColumnsForZScore(dataFrame, False)
-    teams = getAllTeams(dataFrame)
-    newDataFrame = pandas.DataFrame()
-    for i in range(len(teams)):
-        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
-        newDataFrame.loc[i, "team_number"] = teams[i]
-        for column in allColumns:
-            columnQuartile = teamDataFrame[column].quantile(0.25)
-            filteredColumn = teamDataFrame.loc[(dataFrame[column] >= columnQuartile)][column]
-            newDataFrame.loc[newDataFrame.index[i], column] = filteredColumn.median()
-    return newDataFrame
-
-def getModeDataFrame(dataFrame):
-    allColumns = getColumnsForZScore(dataFrame, False)
-    teams = getAllTeams(dataFrame)
-    newDataFrame = pandas.DataFrame()
-    for i in range(len(teams)):
-        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
-        newDataFrame.loc[i, "team_number"] = teams[i]
-        for column in allColumns:
-            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].mode().tolist()[0]
-    return newDataFrame
-
-def getModeDataFrameQ1Minimum(dataFrame):
-    allColumns = getColumnsForZScore(dataFrame, False)
-    teams = getAllTeams(dataFrame)
-    newDataFrame = pandas.DataFrame()
-    for i in range(len(teams)):
-        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
-        newDataFrame.loc[i, "team_number"] = teams[i]
-        for column in allColumns:
-            columnQuartile = teamDataFrame[column].quantile(0.25)
-            filteredColumn = teamDataFrame.loc[(dataFrame[column] >= columnQuartile)][column]
-            newDataFrame.loc[newDataFrame.index[i], column] = filteredColumn.mode().tolist()[0]
-    return newDataFrame
-    
-def getMaxDataFrame(dataFrame):
-    allColumns = getColumnsForZScore(dataFrame, False)
-    teams = getAllTeams(dataFrame)
-    newDataFrame = pandas.DataFrame()
-    for i in range(len(teams)):
-        teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
-        newDataFrame.loc[i, "team_number"] = teams[i]
-        for column in allColumns:
-            newDataFrame.loc[newDataFrame.index[i], column] = teamDataFrame[column].max()
+            dataFrameToUse = teamDataFrame.copy()
+            firstQuartile = dataFrameToUse[column].quantile(0.25)
+            thirdQuartile = dataFrameToUse[column].quantile(0.75)
+            if q1MinimumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] >= firstQuartile)]
+            if q3MaximumFilter:
+                dataFrameToUse = dataFrameToUse.loc[(dataFrame[column] <= thirdQuartile)]
+            newDataFrame.loc[newDataFrame.index[i], column] = dataFrameToUse[column].max()
     return newDataFrame
 
 def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
@@ -531,7 +525,7 @@ def rankTeamsByZScore(dataFrame, sliderValues, matchFilter=None, teamFilter=None
     dataFrame = filterDataFrame(dataFrame, matchFilter)
     teams = getAllTeams(dataFrame)
     teamZScores = {}
-    dataFrameBuffer = [[None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None]]
+    dataFrameBuffer = [[None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None]]
     accuracyBuffer = {}
     for team in teams:
         eliminated = False
