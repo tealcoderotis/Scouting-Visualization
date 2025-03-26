@@ -169,13 +169,13 @@ def getDataTypeOfColumn(dataFrame, column):
     return dataFrame.dtypes[column]
 
 def applyPointValue(data, ranking):
-    if not isnan(data) or data == None:
+    if not isnan(data) or data != None:
         return data * ranking
     else:
         return nan
 
 def applyPointValueFromDropdown(data, dropdown, ranking):
-    if data != None:
+    if data != None and data in dropdown:
         return ranking[dropdown.index(data)]
     else:
         return nan
@@ -525,75 +525,88 @@ def rankTeamsByZScore(dataFrame, sliderValues, matchFilter=None, teamFilter=None
     dataFrame = filterDataFrame(dataFrame, matchFilter)
     teams = getAllTeams(dataFrame)
     teamZScores = {}
-    dataFrameBuffer = [[None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None], [None, None, None, None]]
+    dataFrameBuffer = {}
     accuracyBuffer = {}
     for team in teams:
         eliminated = False
         currentScore = 0
         for column, ranking in sliderValues.items():
             if column in dataFrame.columns:
+                if ranking[0] not in dataFrameBuffer:
+                    dataFrameBuffer[ranking[0]] = {}
+                if ranking[4] == False and ranking[5] == False:
+                    bufferToUse = 0
+                elif ranking[4] == True and ranking[5] == False:
+                    bufferToUse = 1
+                elif ranking[4] == False and ranking[5] == True:
+                    bufferToUse = 2
+                elif ranking[4] == True and ranking[5] == True:
+                    bufferToUse = 3
+                if bufferToUse not in dataFrameBuffer[ranking[0]]:
+                    dataFrameBuffer[ranking[0]][bufferToUse] = [None, None, None, None]
                 if ranking[2] and ranking[3]:
-                    if dataFrameBuffer[ranking[0]][3] is None:
+                    if dataFrameBuffer[ranking[0]][bufferToUse][3] is None and (ranking[1] != 0 or teamFilter[column][0] != 0):
                         dataFrameToGenerate = getDataFrameWithoutNoShows(getDataFrameWithoutRobotStops(dataFrame))
-                        dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0])
-                        dataFrameBuffer[ranking[0]][3] = dataFrameToUse.copy()
+                        dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5])
+                        dataFrameBuffer[ranking[0]][bufferToUse][3] = dataFrameToUse.copy()
                     else:
-                        dataFrameToUse = dataFrameBuffer[ranking[0]][3]
+                        dataFrameToUse = dataFrameBuffer[ranking[0]][bufferToUse][3]
                 elif ranking[3]:
-                    if dataFrameBuffer[ranking[0]][2] is None:
+                    if dataFrameBuffer[ranking[0]][bufferToUse][2] is None and (ranking[1] != 0 or teamFilter[column][0] != 0):
                         dataFrameToGenerate = getDataFrameWithoutNoShows(dataFrame)
-                        dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0])
-                        dataFrameBuffer[ranking[0]][2] = dataFrameToUse.copy()
+                        dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5])
+                        dataFrameBuffer[ranking[0]][bufferToUse][2] = dataFrameToUse.copy()
                     else:
-                        dataFrameToUse = dataFrameBuffer[ranking[0]][2]
+                        dataFrameToUse = dataFrameBuffer[ranking[0]][bufferToUse][2]
                 elif ranking[2]:
-                    if dataFrameBuffer[ranking[0]][1] is None:
+                    if dataFrameBuffer[ranking[0]][bufferToUse][1] is None and (ranking[1] != 0 or teamFilter[column][0] != 0):
                         dataFrameToGenerate = getDataFrameWithoutRobotStops(dataFrame)
-                        dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0])
-                        dataFrameBuffer[ranking[0]][1] = dataFrameToUse.copy()
+                        dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5])
+                        dataFrameBuffer[ranking[0]][bufferToUse][1] = dataFrameToUse.copy()
                     else:
-                        dataFrameToUse = dataFrameBuffer[ranking[0]][1]
+                        dataFrameToUse = dataFrameBuffer[ranking[0]][bufferToUse][1]
                 else:
-                    if dataFrameBuffer[ranking[0]][0] is None:
-                        dataFrameToUse = getDataFrame(dataFrame, ranking[0])
-                        dataFrameBuffer[ranking[0]][0] = dataFrameToUse.copy()
+                    if dataFrameBuffer[ranking[0]][bufferToUse][0] is None and (ranking[1] != 0 or teamFilter[column][0] != 0):
+                        dataFrameToUse = getDataFrame(dataFrame, ranking[0], ranking[4], ranking[5])
+                        dataFrameBuffer[ranking[0]][bufferToUse][0] = dataFrameToUse.copy()
                     else:
-                        dataFrameToUse = dataFrameBuffer[ranking[0]][0]
-                if not filterTeam(dataFrameToUse, team, column, teamFilter[column]):
+                        dataFrameToUse = dataFrameBuffer[ranking[0]][bufferToUse][0]
+                if teamFilter[column][0] != 0 and not filterTeam(dataFrameToUse, team, column, teamFilter[column]):
                     eliminated = True
                     break
-                currentScore += getTeamZScoreForColumn(dataFrameToUse, team, column, ranking[1])
+                if ranking[1] != 0:
+                    currentScore += getTeamZScoreForColumn(dataFrameToUse, team, column, ranking[1])
             elif column in COUNTED_VALUES:
                 if column not in accuracyBuffer:
                     accuracyBuffer[column] = [None, None, None, None]
                 if ranking[2] and ranking[3]:
-                    if accuracyBuffer[column][3] is None:
+                    if accuracyBuffer[column][3] is None and (ranking[1] != 0 or teamFilter[column][0] != 0):
                         dataFrameToGenerate = getDataFrameWithoutNoShows(getDataFrameWithoutRobotStops(dataFrame))
                         dataFrameToUse = getAccuracyDataFrame(dataFrameToGenerate, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)
                         accuracyBuffer[column][3] = dataFrameToUse.copy()
                     else:
                         dataFrameToUse = accuracyBuffer[column][3]
                 elif ranking[3]:
-                    if accuracyBuffer[column][2] is None:
+                    if accuracyBuffer[column][2] is None and (ranking[1] != 0 or teamFilter[column][0] != 0):
                         dataFrameToGenerate = getDataFrameWithoutNoShows(dataFrame)
                         dataFrameToUse = getAccuracyDataFrame(dataFrameToGenerate, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)
                         accuracyBuffer[column][2] = dataFrameToUse.copy()
                     else:
                         dataFrameToUse = accuracyBuffer[column][2]
                 elif ranking[2]:
-                    if accuracyBuffer[column][1] is None:
+                    if accuracyBuffer[column][1] is None and (ranking[1] != 0 or teamFilter[column][0] != 0):
                         dataFrameToGenerate = getDataFrameWithoutRobotStops(dataFrame)
                         dataFrameToUse = getAccuracyDataFrame(dataFrameToGenerate, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)
                         accuracyBuffer[column][1] = dataFrameToUse.copy()
                     else:
                         dataFrameToUse = accuracyBuffer[column][1]
                 else:
-                    if accuracyBuffer[column][0] is None:
+                    if accuracyBuffer[column][0] is None and (ranking[1] != 0 or teamFilter[column][0] != 0):
                         dataFrameToUse = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)
                         accuracyBuffer[column][0] = dataFrameToUse.copy()
                     else:
                         dataFrameToUse = accuracyBuffer[column][0]
-                if not filterTeam(dataFrameToUse, team, column, teamFilter[column]):
+                if teamFilter[column][0] != 0 and not filterTeam(dataFrameToUse, team, column, teamFilter[column]):
                     eliminated = True
                     break
                 currentScore += getTeamZScoreForColumn(dataFrameToUse, team, column, ranking[1])

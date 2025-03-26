@@ -70,9 +70,10 @@ class KeySlider(QtWidgets.QWidget):
         self.ignoreStopsAndInjuresCheckbox = QtWidgets.QCheckBox(text="Ignore stops and injures")
         self.checkBoxLayout.addWidget(self.ignoreStopsAndInjuresCheckbox)
         self.q1MinimumCheckBox = QtWidgets.QCheckBox(text="Q1 Minimum")
-        self.checkBoxLayout.addWidget(self.q1MinimumCheckBox)
         self.q3MaximumCheckBox = QtWidgets.QCheckBox(text="Q3 Maximum")
-        self.checkBoxLayout.addWidget(self.q3MaximumCheckBox)
+        if comboBoxAvaliable:
+            self.checkBoxLayout.addWidget(self.q1MinimumCheckBox)
+            self.checkBoxLayout.addWidget(self.q3MaximumCheckBox)
         self.checkBoxWidget.setLayout(self.checkBoxLayout)
         self.mainLayout.addWidget(self.checkBoxWidget)
         self.filterWidget = QtWidgets.QWidget()
@@ -566,16 +567,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                     return None
-        try:
-            zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
-        except Exception as e:
+        '''try:'''
+        zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
+        '''except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Error", str(e))
-        else:
-            for i in reversed(range(self.teamListLayout.count())):
-                if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
-                    self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
-            for zScore in zScores:
-                self.addTeam(zScore[0], zScore[1])
+        else:'''
+        for i in reversed(range(self.teamListLayout.count())):
+            if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
+                self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
+        for zScore in zScores:
+            self.addTeam(zScore[0], zScore[1])
 
     def saveSliders(self):
         filePath = QtWidgets.QFileDialog.getSaveFileName(self, filter="JSON files (*.json)")[0]
