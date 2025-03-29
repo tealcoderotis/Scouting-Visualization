@@ -4,6 +4,29 @@ import sys
 import json
 from os import path
 
+class WorkerSignals(QtCore.QObject):
+    finished = QtCore.pyqtSignal()
+    error = QtCore.pyqtSignal(Exception)
+    result = QtCore.pyqtSignal(object)
+
+class Worker(QtCore.QRunnable):
+    def __init__(self, function, *args, **kwargs):
+        super().__init__()
+        self.function = function
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+    def run(self):
+        try:
+            result = self.function(*self.args, **self.kwargs)
+        except Exception as e:
+            self.signals.error.emit(e)
+        else:
+            self.signals.result.emit(result)
+        finally:
+            self.signals.finished.emit()
+
 class TeamLabel(QtWidgets.QWidget):
     def __init__(self, teamNumber, zScore, robotStops, parent=None):
         super().__init__(parent)
@@ -198,6 +221,8 @@ class StopViewerDialog(QtWidgets.QDialog):
 class DataViewerDialog(QtWidgets.QDialog):
     def __init__(self, dataFrame, title, comboBoxItems, matchFilters, teamFilters, parent=None):
         super().__init__(parent)
+        self.threadPool = QtCore.QThreadPool()
+        self.pleaseWaitDialog = None
         self.dataFrame = dataFrame
         self.matchFilters = matchFilters
         self.teamFilters = teamFilters
@@ -231,25 +256,37 @@ class DataViewerDialog(QtWidgets.QDialog):
         self.show()
         self.addData()
 
-    def addData(self):
+    def addDataAsync(self):
         dataFrame = self.dataFrame
         if self.ignoreNoShowsCheckBox.isChecked():
             dataFrame = analyzer.getDataFrameWithoutNoShows(dataFrame)
         if self.ignoreStopsCheckBox.isChecked():
             dataFrame = analyzer.getDataFrameWithoutRobotStops(dataFrame)
-        try:
-            data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), self.matchFilters, self.teamFilters, self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()))
-        except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "Error", str(e))
-        else:
-            for i in reversed(range(self.mainTable.rowCount())):
-                self.mainTable.removeRow(i)
-            self.mainTable.setColumnCount(len(data[0]))
-            self.mainTable.setRowCount(len(data) - 1)
-            self.mainTable.setHorizontalHeaderLabels(data[0])
-            for row in range(1, len(data)):
-                for column in range(len(data[row])):
-                    self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(data[row][column])))
+        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), self.matchFilters, self.teamFilters, self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()))
+        return data
+
+    def addData(self):
+        worker = Worker(self.addDataAsync)
+        worker.signals.result.connect(self.addDataToUi)
+        worker.signals.error.connect(self.showErrorDialog)
+        self.threadPool.start(worker)
+        self.pleaseWaitDialog = PleaseWaitDialog("Calculating statistics...", self)
+        self.pleaseWaitDialog.exec()
+    
+    def showErrorDialog(self, e):
+        self.pleaseWaitDialog.accept()
+        QtWidgets.QMessageBox.critical(self, "Error", str(e))
+
+    def addDataToUi(self, data):
+        self.pleaseWaitDialog.accept()
+        for i in reversed(range(self.mainTable.rowCount())):
+            self.mainTable.removeRow(i)
+        self.mainTable.setColumnCount(len(data[0]))
+        self.mainTable.setRowCount(len(data) - 1)
+        self.mainTable.setHorizontalHeaderLabels(data[0])
+        for row in range(1, len(data)):
+            for column in range(len(data[row])):
+                self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(data[row][column])))
 
 class FilterPoint(QtWidgets.QWidget):
     def __init__(self, column, filterList=[0, 0.0], dataType="number", parent=None):
@@ -435,9 +472,33 @@ class FilterDialog(QtWidgets.QDialog):
                 filter[self.filterListLayout.itemAt(i).widget().column] = self.filterListLayout.itemAt(i).widget().getFilterList()
         return filter
 
+class PleaseWaitDialog(QtWidgets.QDialog):
+    def __init__(self, text="Please wait", parent=None):
+        super().__init__(parent)
+        self.mainLayout = QtWidgets.QVBoxLayout()
+        self.dialogLabel = QtWidgets.QLabel(text=text)
+        self.mainLayout.addWidget(self.dialogLabel)
+        self.progressBar = QtWidgets.QProgressBar()
+        self.progressBar.setMinimum(0)
+        self.progressBar.setMaximum(0)
+        self.progressBar.setTextVisible(False)
+        self.mainLayout.addWidget(self.progressBar)
+        self.setLayout(self.mainLayout)
+        self.setWindowTitle("Please Wait")
+        self.setWindowModality(True)
+        self.show()
+
+    def reject(self):
+        pass
+
+    def closeEvent(self, e):
+        e.ignore()
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.pleaseWaitDialog = None
+        self.threadPool = QtCore.QThreadPool()
         self.mainWidget = QtWidgets.QWidget()
         self.mainLayout = QtWidgets.QHBoxLayout()
         self.mainWidget.setLayout(self.mainLayout)
@@ -554,6 +615,9 @@ class MainWindow(QtWidgets.QMainWindow):
         keySlider = KeySlider(key, not isCounted)
         self.sliderListLayout.insertWidget(self.sliderListLayout.count() - 1, keySlider)
 
+    def getZScoresAsync(self, dataFrame, sliderValues, matchFilters, teamFilters):
+        return analyzer.rankTeamsByZScore(dataFrame, sliderValues, matchFilters, teamFilters)
+
     def updateTeamScores(self):
         sliderValues = {}
         teamFilters = {}
@@ -567,16 +631,24 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                     return None
-        '''try:'''
-        zScores = analyzer.rankTeamsByZScore(self.dataFrame, sliderValues, self.filter, teamFilters)
-        '''except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "Error", str(e))
-        else:'''
+        worker = Worker(self.getZScoresAsync, self.dataFrame, sliderValues, self.filter, teamFilters)
+        worker.signals.result.connect(self.addZScoresToUi)
+        worker.signals.error.connect(self.showErrorDialog)
+        self.threadPool.start(worker)
+        self.pleaseWaitDialog = PleaseWaitDialog("Calculating z-scores...", self)
+        self.pleaseWaitDialog.exec()
+
+    def addZScoresToUi(self, zScores):
+        self.pleaseWaitDialog.accept()
         for i in reversed(range(self.teamListLayout.count())):
             if type(self.teamListLayout.itemAt(i).widget()) == TeamLabel:
                 self.teamListLayout.removeWidget(self.teamListLayout.itemAt(i).widget())
         for zScore in zScores:
             self.addTeam(zScore[0], zScore[1])
+
+    def showErrorDialog(self, e):
+        self.pleaseWaitDialog.accept()
+        QtWidgets.QMessageBox.critical(self, "Error", str(e))
 
     def saveSliders(self):
         filePath = QtWidgets.QFileDialog.getSaveFileName(self, filter="JSON files (*.json)")[0]
