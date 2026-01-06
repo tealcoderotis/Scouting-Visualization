@@ -2,6 +2,7 @@ import analyzer
 from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import json
+from pathlib import Path
 from os import path
 
 class WorkerSignals(QtCore.QObject):
@@ -557,8 +558,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("Scouting Visualization")
         self.showMaximized()
         databaseSucessful = False
-        if path.exists("config.json"):
-            file = open("config.json", "r")
+        programDirectory = Path(__file__).parent
+        configPath = programDirectory / "config.json"
+        if path.exists(configPath):
+            file = open(configPath, "r")
             config = json.loads(file.read())
             file.close()
             if config["useDatabase"] == True:
