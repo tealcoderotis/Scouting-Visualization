@@ -3,7 +3,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import json
 from pathlib import Path
-from os import path
+from os import path, environ
 
 class WorkerSignals(QtCore.QObject):
     finished = QtCore.pyqtSignal()
@@ -735,6 +735,9 @@ class MainWindow(QtWidgets.QMainWindow):
             if valueNotInJson:
                 QtWidgets.QMessageBox.warning(self, "Warning", "One or more filters is not in the file")
 
+environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
+QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle(QtWidgets.QStyleFactory.create("fusion"))
 palette = QtGui.QPalette()
