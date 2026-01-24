@@ -37,10 +37,11 @@ class TeamLabel(QtWidgets.QWidget):
         self.mainLayout = QtWidgets.QHBoxLayout()
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setLayout(self.mainLayout)
-        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0 or robotStops[3] != 0:
-            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score; ({', '.join(map(str, robotStops[0]))}) robot stops; ({', '.join(map(str, robotStops[1]))}) robot injures; {robotStops[3]} defense matches; {robotStops[2]} no shows")
+        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[3] != 0 or any(i != 0 for i in robotStops[2]):
+            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score; ({', '.join(map(str, robotStops[0]))}) robot stops; ({', '.join(map(str, robotStops[1]))}) high centers; ({', '.join(map(str, robotStops[2]))}) defense matches; {robotStops[3]} no shows")
         else:
             self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score")
+        self.teamNumberLabel.setWordWrap(True)
         self.mainLayout.addWidget(self.teamNumberLabel, stretch=1)
         self.viewStopDetaisButton = QtWidgets.QPushButton(text="View timeline")
         self.viewStopDetaisButton.clicked.connect(self.showStopDetails)
@@ -550,15 +551,15 @@ class MainWindow(QtWidgets.QMainWindow):
         exitAction = QtWidgets.QAction("Exit", self)
         exitAction.triggered.connect(sys.exit)
         fileMenu.addAction(exitAction)
-        if path.exists("icon.ico"):
-            self.setWindowIcon(QtGui.QIcon("icon.ico"))
-        elif path.exists("_internal\\icon.ico"):
-            self.setWindowIcon(QtGui.QIcon("_internal\\icon.ico"))
-        self.setMinimumSize(1200, 600)
+        programDirectory = Path(__file__).parent
+        if path.exists(programDirectory / "icon.ico"):
+            self.setWindowIcon(QtGui.QIcon(str(programDirectory / "icon.ico")))
+        elif path.exists(programDirectory / "_internal" / "icon.ico"):
+            self.setWindowIcon(QtGui.QIcon(str(programDirectory / "_internal" / "icon.ico")))
+        self.resize(1200, 600)
         self.setWindowTitle("Scouting Visualization")
         self.showMaximized()
         databaseSucessful = False
-        programDirectory = Path(__file__).parent
         configPath = programDirectory / "config.json"
         if path.exists(configPath):
             file = open(configPath, "r")

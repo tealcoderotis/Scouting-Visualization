@@ -3,7 +3,7 @@ import pandas
 from io import StringIO
 from math import isnan, nan
 
-CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
+'''CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
 ROBOT_INJURE_VALUES = ["no_injure", "fixed_injure", "end_injure"]
 VALUE_GROUPS = {
@@ -113,6 +113,85 @@ POINT_VALUES = {
         "dropdown": CLIMB_VALUES,
         "pointValue": [0, 2, 6, 12]
     }
+}'''
+
+NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance"]
+CLIMB_VALUES = ["no_climb", "l1", "l2", "l3"]
+DEFENSE_VALUES = ["no_defense", "some_defense", "mostly_defense"]
+ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
+HIGH_CENTER_VALUES = ["no_high_center", "one_high_center", "many_high_centers", "end_high_centers"]
+VALUE_GROUPS = {
+    "auto_fuel_hub_attempt": ["auto_fuel_hub_success", "auto_fuel_hub_miss"],
+    "auto_fuel_corral_attempt": ["auto_fuel_corral_success", "auto_fuel_corral_miss"],
+    "tele_fuel_hub_attempt_active": ["tele_fuel_hub_success_active", "tele_fuel_hub_miss_active"],
+    "tele_fuel_hub_attempt_inactive": ["tele_fuel_hub_success_inactive", "tele_fuel_hub_miss_inactive"],
+    "tele_fuel_hub_success": ["tele_fuel_hub_success_active", "tele_fuel_hub_success_inactive"],
+    "tele_fuel_hub_miss": ["tele_fuel_hub_miss_active", "tele_fuel_hub_miss_inactive"],
+    "tele_fuel_hub_attempt": ["tele_fuel_hub_success", "tele_fuel_hub_miss"],
+    "tele_fuel_corral_attempt": ["tele_fuel_corral_success", "tele_fuel_corral_miss"]
+}
+ACCURACY_VALUES = {
+    "auto_fuel_hub_accuracy": ["auto_fuel_hub_success", "auto_fuel_hub_attempt"],
+    "auto_fuel_corral_accuracy": ["auto_fuel_corral_success", "auto_fuel_corral_attempt"],
+    "tele_fuel_hub_accuracy_active": ["tele_fuel_hub_success_active", "tele_fuel_hub_attempt_active"],
+    "tele_fuel_hub_accuracy_inactive": ["tele_fuel_hub_success_inactive", "tele_fuel_hub_attempt_inactive"],
+    "tele_fuel_hub_accuracy": ["tele_fuel_hub_success", "tele_fuel_hub_attempt"],
+    "tele_corral_accuracy": ["tele_fuel_corral_success", "tele_fuel_corral_attempt"]
+}
+COUNTED_VALUES = {
+    "auto_climb_accuracy": {
+        "column": "auto_climb",
+        "favorableValue": True
+    },
+    "tele_no_climb_accuracy": {
+        "column": "tele_climb",
+        "favorableValue": "no_climb"
+    },
+    "tele_l1_climb_accuracy": {
+        "column": "tele_climb",
+        "favorableValue": "l1"
+    },
+    "tele_l2_climb_accuracy": {
+        "column": "tele_climb",
+        "favorableValue": "l2"
+    },
+    "tele_l3_climb_accuracy": {
+        "column": "tele_climb",
+        "favorableValue": "l3"
+    }
+}
+MULTIPLIED_VALUES = {
+    "auto_fuel_hub_success": {
+        "column": "auto_fuel_hub_cycles",
+        "secondColumn": "auto_fuel_per_cycle"
+    },
+    "tele_fuel_hub_success_active": {
+        "column": "tele_fuel_hub_cycles_active",
+        "secondColumn": "tele_fuel_per_cycle"
+    },
+    "tele_fuel_hub_success_inactive": {
+        "column": "tele_fuel_hub_cycles_inactive",
+        "secondColumn": "tele_fuel_per_cycle"
+    }
+}
+POINT_VALUES = {
+    "auto_fuel_hub_points": {
+        "column": "auto_fuel_hub_success",
+        "pointValue": 1
+    },
+    "auto_climb_points": {
+        "column": "auto_climb",
+        "pointValue": 15
+    },
+    "tele_fuel_hub_points_active": {
+        "column": "tele_fuel_hub_success_active",
+        "pointValue": 1
+    },
+    "tele_climb_points": {
+        "column": "tele_climb",
+        "dropdown": CLIMB_VALUES,
+        "pointValue": [0, 10, 20, 30]
+    }
 }
 
 def getDatabaseData(host, user, password, database, table):
@@ -143,7 +222,7 @@ def dropNaN(dataFrame):
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    return accuracyValues(groupValues(pointValues(tinyIntToBoolean(dataFrame, data[2]))))
+    return accuracyValues(groupValues(pointValues(multiplyValues(tinyIntToBoolean(dataFrame, data[2])))))
 
 def applyTinyIntToBoolean(data):
     return bool(data)
@@ -158,7 +237,7 @@ def tinyIntToBoolean(dataFrame, dataTypes):
 def getDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
     dataFrame, dataTypes = dropDataTypes(dataFrame)
-    return accuracyValues(groupValues(pointValues(tinyIntToBoolean(dataFrame, dataTypes))))
+    return accuracyValues(groupValues(pointValues(multiplyValues(tinyIntToBoolean(dataFrame, dataTypes)))))
 
 def dropDataTypes(dataFrame):
     types = dataFrame.iloc[0].values.tolist()
@@ -186,6 +265,15 @@ def pointValues(dataFrame):
             columnData = dataFrame[value["column"]].apply(applyPointValueFromDropdown, args=(value["dropdown"], value["pointValue"],))
         else:
             columnData = dataFrame[value["column"]].apply(applyPointValue, args=(value["pointValue"],))
+        dataFrame.insert(dataFrame.columns.get_loc(value["column"]) + 1, key, columnData)
+    return dataFrame
+
+def applyMultipyValue(row, column1, column2):
+    return row[column1] * row[column2]
+
+def multiplyValues(dataFrame):
+    for key, value in MULTIPLIED_VALUES.items():
+        columnData = dataFrame.apply(applyMultipyValue, args=(value["column"], value["secondColumn"],), axis=1)
         dataFrame.insert(dataFrame.columns.get_loc(value["column"]) + 1, key, columnData)
     return dataFrame
 
@@ -232,18 +320,21 @@ def getTotalRobotStopsForEachType(dataFrame, teamNumber):
     for i in range(1, len(ROBOT_STOP_VALUES)):
         robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[i])].shape[0]
         stopList.append(robotStops)
-    injureList = []
-    for i in range(1, len(ROBOT_INJURE_VALUES)):
-        robotStops = teamDataFrame.loc[(dataFrame["robot_injure"] == ROBOT_INJURE_VALUES[i])].shape[0]
-        injureList.append(robotStops)
+    highCenterList = []
+    for i in range(1, len(HIGH_CENTER_VALUES)):
+        robotStops = teamDataFrame.loc[(dataFrame["high_center"] == HIGH_CENTER_VALUES[i])].shape[0]
+        highCenterList.append(robotStops)
     noShows = teamDataFrame.loc[(dataFrame["no_show"] != False)].shape[0]
-    defenseMatches = teamDataFrame.loc[(dataFrame["played_defense"] != False)].shape[0]
-    return [stopList, injureList, noShows, defenseMatches]
+    defenseList = []
+    for i in range(1, len(DEFENSE_VALUES)):
+        robotStops = teamDataFrame.loc[(dataFrame["defense"] == DEFENSE_VALUES[i])].shape[0]
+        defenseList.append(robotStops)
+    return [stopList, highCenterList, defenseList, noShows]
 
 def getStopDetails(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
     teamDataFrame = teamDataFrame.sort_values(by=["match_number"])
-    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["robot_injure"]  != ROBOT_INJURE_VALUES[0]) | (dataFrame["no_show"]  != False) | (dataFrame["played_defense"] != False)][["timestamp", "match_number", "robot_stop", "robot_injure",  "played_defense", "no_show"]]
+    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["high_center"]  != HIGH_CENTER_VALUES[0]) | (dataFrame["no_show"]  != False) | (dataFrame["defense"] != DEFENSE_VALUES[0])][["timestamp", "match_number", "robot_stop", "high_center",  "defense", "no_show"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
 
 def getColumns(dataFrame):
@@ -258,7 +349,7 @@ def getColumnsForZScore(dataFrame, getCountedValues=True):
             if dataTypes[i] == "int64" or dataTypes[i] == "float64":
                 columnsToReturn.append(columns[i])
     if getCountedValues:
-        for column in COUNTED_VALUES:
+        for column, value in COUNTED_VALUES.items():
             columnsToReturn.append(column)
         return [columnsToReturn, list(COUNTED_VALUES.keys())]
     else:
