@@ -222,7 +222,15 @@ def dropNaN(dataFrame):
 def getDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    return accuracyValues(groupValues(pointValues(multiplyValues(tinyIntToBoolean(dataFrame, data[2])))))
+    return preProcessDataFrame(dataFrame, data[2])
+
+def getCycleDataFrameFromDatabase(host, user, password, database, table):
+    data = getDatabaseData(host, user, password, database, table)
+    dataFrame = pandas.DataFrame(data[1], columns=data[0])
+    return tinyIntToBoolean(dataFrame, data[2])
+
+def preProcessDataFrame(dataFrame, dataTypes):
+    return accuracyValues(groupValues(pointValues(multiplyValues(tinyIntToBoolean(dataFrame, dataTypes)))))
 
 def applyTinyIntToBoolean(data):
     return bool(data)
@@ -237,7 +245,12 @@ def tinyIntToBoolean(dataFrame, dataTypes):
 def getDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
     dataFrame, dataTypes = dropDataTypes(dataFrame)
-    return accuracyValues(groupValues(pointValues(multiplyValues(tinyIntToBoolean(dataFrame, dataTypes)))))
+    return preProcessDataFrame(dataFrame, dataTypes)
+
+def getCycleDataFrameFromCSV(filePath):
+    dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
+    dataFrame, dataTypes = dropDataTypes(dataFrame)
+    return tinyIntToBoolean(dataFrame, dataTypes)
 
 def dropDataTypes(dataFrame):
     types = dataFrame.iloc[0].values.tolist()
@@ -309,7 +322,7 @@ def getDataFrameForTeam(dataFrame, teamNumber):
     return dataFrame[dataFrame["team_number"].values == teamNumber]
 
 def getDataFrameWithoutRobotStops(dataFrame):
-    return dataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[0]) & (dataFrame["robot_injure"]  == ROBOT_INJURE_VALUES[0])]
+    return dataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[0])]
 
 def getDataFrameWithoutNoShows(dataFrame):
     return dataFrame.loc[(dataFrame["no_show"] == 0)]

@@ -499,6 +499,8 @@ class PleaseWaitDialog(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.dataFrame = None
+        self.cycleDataFrame = None
         self.pleaseWaitDialog = None
         self.threadPool = QtCore.QThreadPool()
         self.mainWidget = QtWidgets.QWidget()
@@ -568,6 +570,10 @@ class MainWindow(QtWidgets.QMainWindow):
             if config["useDatabase"] == True:
                 try:
                     self.dataFrame = analyzer.getDataFrameFromDatabase(config["databaseInfo"]["host"], config["databaseInfo"]["user"], config["databaseInfo"]["password"], config["databaseInfo"]["database"], config["databaseInfo"]["table"])
+                    try:
+                        self.cycleDataFrame = analyzer.getCycleDataFrameFromCSV(config["databaseInfo"]["host"], config["databaseInfo"]["user"], config["databaseInfo"]["password"], config["databaseInfo"]["cycleDatabase"], config["databaseInfo"]["cycleTable"])
+                    except:
+                        QtWidgets.QMessageBox.critical(self, "Cannot Connect to Database", f"A database connection cannot be established to get cycle time data\n\n{str(e)}")
                 except Exception as e:
                     result = QtWidgets.QMessageBox.critical(self, "Cannot Connect to Database", f"A database connection cannot be established. Do you want to use a CSV file instead?\n\n{str(e)}", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
                     if result != QtWidgets.QMessageBox.Yes:
@@ -575,10 +581,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     databaseSucessful = True
         if not databaseSucessful:
-            filePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)")[0]
+            filePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Data File")[0]
             if filePath != "":
                 try:
                     self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
+                    cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Time File")[0]
+                    if cycleFilePath != "":
+                        try:
+                            self.cycleDataFrame = analyzer.getCycleDataFrameFromCSV(cycleFilePath)
+                        except:
+                            QtWidgets.QMessageBox.critical(self, "Error", f"Cannot get cycle time data\n\n{str(e)}")
                 except Exception as e:
                     QtWidgets.QMessageBox.critical(self, "Error", str(e))
                     sys.exit()
