@@ -115,7 +115,7 @@ POINT_VALUES = {
     }
 }'''
 
-NOT_DATA_COLUMNS = ["PRIMARY_KEY", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance"]
+NOT_DATA_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance", "device"]
 CLIMB_VALUES = ["no_climb", "l1", "l2", "l3"]
 DEFENSE_VALUES = ["no_defense", "some_defense", "mostly_defense"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
@@ -193,6 +193,7 @@ POINT_VALUES = {
         "pointValue": [0, 10, 20, 30]
     }
 }
+NOT_DATA_CYCLE_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "device"]
 
 def getDatabaseData(host, user, password, database, table):
     db = mysql.connector.connect(host=host, user=user, password=password, buffered=True)
@@ -367,6 +368,16 @@ def getColumnsForZScore(dataFrame, getCountedValues=True):
         return [columnsToReturn, list(COUNTED_VALUES.keys())]
     else:
         return columnsToReturn
+    
+def getColumnsForCycleZScore(dataFrame):
+    columns = getColumns(dataFrame)
+    dataTypes = dataFrame.dtypes.values.tolist()
+    columnsToReturn = []
+    for i in range(len(columns)):
+        if columns[i] not in NOT_DATA_CYCLE_COLUMNS:
+            if dataTypes[i] == "int64" or dataTypes[i] == "float64":
+                columnsToReturn.append(columns[i])
+    return columnsToReturn
     
 def filterDataFrame(dataFrame, filters):
     if filters != None:
@@ -625,7 +636,7 @@ def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
         newDataFrame.loc[i, finalName] = accuracy
     return newDataFrame
 
-def rankTeamsByZScore(dataFrame, sliderValues, matchFilter=None, teamFilter=None):
+def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, matchFilter=None, teamFilter=None):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
     teams = getAllTeams(dataFrame)
     teamZScores = {}

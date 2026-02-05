@@ -599,6 +599,10 @@ class MainWindow(QtWidgets.QMainWindow):
         sliders = analyzer.getColumnsForZScore(self.dataFrame)
         for slider in sliders[0]:
             self.addSlider(slider, slider in sliders[1])
+        if (self.cycleDataFrame is not None):
+            cycleSliders = analyzer.getColumnsForCycleZScore(self.cycleDataFrame)
+            for slider in cycleSliders:
+                self.addSlider(slider, False)
         self.filter = {}
         for column in analyzer.getColumns(self.dataFrame):
             self.filter[column] = [0, 0.0]
