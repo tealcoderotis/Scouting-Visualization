@@ -27,6 +27,9 @@ class Worker(QtCore.QRunnable):
             self.signals.result.emit(result)
         finally:
             self.signals.finished.emit()
+        result = self.function(*self.args, **self.kwargs)
+        self.signals.result.emit(result)
+        self.signals.finished.emit()
 
 class TeamLabel(QtWidgets.QWidget):
     def __init__(self, teamNumber, zScore, robotStops, parent=None):
@@ -66,8 +69,9 @@ class UnscrollableSlider(QtWidgets.QSlider):
         pass
 
 class KeySlider(QtWidgets.QWidget):
-    def __init__(self, key, comboBoxAvaliable=True, parent=None):
+    def __init__(self, key, comboBoxAvaliable=True, isCycleSlider=False, parent=None):
         super().__init__(parent)
+        self.isCycleSlider = isCycleSlider
         self.key = key
         self.filterCode = ""
         self.mainLayout = QtWidgets.QVBoxLayout()
@@ -602,7 +606,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if (self.cycleDataFrame is not None):
             cycleSliders = analyzer.getColumnsForCycleZScore(self.cycleDataFrame)
             for slider in cycleSliders:
-                self.addSlider(slider, False)
+                self.addSlider(slider, False, True)
         self.filter = {}
         for column in analyzer.getColumns(self.dataFrame):
             self.filter[column] = [0, 0.0]
@@ -631,27 +635,38 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog = DataViewerDialog(self.dataFrame, "Data Viewer", comboBoxList, self.filter, teamFilters, self)
         dialog.exec()
 
-    def addSlider(self, key, isCounted):
-        keySlider = KeySlider(key, not isCounted)
+    def addSlider(self, key, isCounted, isCycleSlider=False):
+        keySlider = KeySlider(key, not isCounted, isCycleSlider)
         self.sliderListLayout.insertWidget(self.sliderListLayout.count() - 1, keySlider)
 
-    def getZScoresAsync(self, dataFrame, sliderValues, matchFilters, teamFilters):
-        return analyzer.rankTeamsByZScore(dataFrame, sliderValues, matchFilters, teamFilters)
+    def getZScoresAsync(self, dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilters, teamFilters, cycleFilters):
+        return analyzer.rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilters, teamFilters, cycleFilters)
 
     def updateTeamScores(self):
         sliderValues = {}
+        cycleSliderValues = {}
         teamFilters = {}
+        teamCycleFilters = {}
         for i in range(self.sliderListLayout.count()):
             if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
                 values = self.sliderListLayout.itemAt(i).widget().getValues()
-                sliderValues[values[0]] = values[1]
-                if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
-                    filter = self.sliderListLayout.itemAt(i).widget().getFilter()
-                    teamFilters[filter[0]] = filter[1]
+                if not self.sliderListLayout.itemAt(i).widget().isCycleSlider:
+                    sliderValues[values[0]] = values[1]
+                    if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
+                        filter = self.sliderListLayout.itemAt(i).widget().getFilter()
+                        teamFilters[filter[0]] = filter[1]
+                    else:
+                        QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
+                        return None
                 else:
-                    QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
-                    return None
-        worker = Worker(self.getZScoresAsync, self.dataFrame, sliderValues, self.filter, teamFilters)
+                    cycleSliderValues[values[0]] = values[1]
+                    if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
+                        filter = self.sliderListLayout.itemAt(i).widget().getFilter()
+                        teamCycleFilters[filter[0]] = filter[1]
+                    else:
+                        QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
+                        return None
+        worker = Worker(self.getZScoresAsync, self.dataFrame, self.cycleDataFrame, sliderValues, cycleSliderValues, self.filter, teamFilters, teamCycleFilters)
         worker.signals.result.connect(self.addZScoresToUi)
         worker.signals.error.connect(self.showErrorDialog)
         self.threadPool.start(worker)

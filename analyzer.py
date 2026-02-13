@@ -128,7 +128,8 @@ VALUE_GROUPS = {
     "tele_fuel_hub_success": ["tele_fuel_hub_success_active", "tele_fuel_hub_success_inactive"],
     "tele_fuel_hub_miss": ["tele_fuel_hub_miss_active", "tele_fuel_hub_miss_inactive"],
     "tele_fuel_hub_attempt": ["tele_fuel_hub_success", "tele_fuel_hub_miss"],
-    "tele_fuel_corral_attempt": ["tele_fuel_corral_success", "tele_fuel_corral_miss"]
+    "tele_fuel_corral_attempt": ["tele_fuel_corral_success", "tele_fuel_corral_miss"],
+    "tele_fuel_hub_cycles": ["tele_fuel_hub_cycles_active", "tele_fuel_hub_cycles_inactive"]
 }
 ACCURACY_VALUES = {
     "auto_fuel_hub_accuracy": ["auto_fuel_hub_success", "auto_fuel_hub_attempt"],
@@ -193,7 +194,8 @@ POINT_VALUES = {
         "pointValue": [0, 10, 20, 30]
     }
 }
-NOT_DATA_CYCLE_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "device"]
+NOT_DATA_CYCLE_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "device", "cycle_number"]
+CYCLE_TYPES = ["auto_fuel_hub_success", "tele_fuel_hub_success_active", "tele_fuel_hub_success_inactive"]
 
 def getDatabaseData(host, user, password, database, table):
     db = mysql.connector.connect(host=host, user=user, password=password, buffered=True)
@@ -459,42 +461,48 @@ def filterDataFrame(dataFrame, filters):
 
 def filterTeam(dataFrame, teamNumber, column, filter):
     data = dataFrame.to_dict("list")
-    row = dataFrame.loc[(dataFrame["team_number"] == teamNumber)].to_dict("records")[0]
-    value = row[column]
-    if filter[0] == 1:
-        return value == filter[1]
-    if filter[0] == 2:
-        return value != filter[1]
-    if filter[0] == 3:
-        return value > filter[1]
-    if filter[0] == 4:
-        return value < filter[1]
-    if filter[0] == 5:
-        return value >= filter[1]
-    if filter[0] == 6:
-        return value <= filter[1]
-    if filter[0] == 7:
-        globalValues = {
-            "input": None,
-            "print": None,
-            "data": data,
-            "row": row,
-            "value": value,
-            "column": column
-        }
-        localValues = {
-            "passes": None
-        }
-        try:
-            code = compile(filter[1], "<string>", "exec")
-            exec(code, globalValues, localValues)
-        except Exception as e:
-            raise Exception(f"Exception occured within custom filter\n\n{str(e)}")
-        else:
-            if type(localValues["passes"]) == bool:
-                return localValues["passes"]
+    try:
+        row = dataFrame.loc[(dataFrame["team_number"] == teamNumber)].to_dict("records")[0]
+    except:
+        row = None
+    if row != None:
+        value = row[column]
+        if filter[0] == 1:
+            return value == filter[1]
+        if filter[0] == 2:
+            return value != filter[1]
+        if filter[0] == 3:
+            return value > filter[1]
+        if filter[0] == 4:
+            return value < filter[1]
+        if filter[0] == 5:
+            return value >= filter[1]
+        if filter[0] == 6:
+            return value <= filter[1]
+        if filter[0] == 7:
+            globalValues = {
+                "input": None,
+                "print": None,
+                "data": data,
+                "row": row,
+                "value": value,
+                "column": column
+            }
+            localValues = {
+                "passes": None
+            }
+            try:
+                code = compile(filter[1], "<string>", "exec")
+                exec(code, globalValues, localValues)
+            except Exception as e:
+                raise Exception(f"Exception occured within custom filter\n\n{str(e)}")
             else:
-                raise TypeError("Custom filter did not returan boolen")
+                if type(localValues["passes"]) == bool:
+                    return localValues["passes"]
+                else:
+                    raise TypeError("Custom filter did not returan boolen")
+        else:
+            return True
     else:
         return True
     
@@ -636,7 +644,7 @@ def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
         newDataFrame.loc[i, finalName] = accuracy
     return newDataFrame
 
-def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, matchFilter=None, teamFilter=None):
+def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilter=None, teamFilter=None, teamCycleFilter=None):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
     teams = getAllTeams(dataFrame)
     teamZScores = {}
@@ -725,6 +733,16 @@ def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, matchFilter=None,
                     eliminated = True
                     break
                 currentScore += getTeamZScoreForColumn(dataFrameToUse, team, column, ranking[1])
+        #TODO Make robot stops and injures filtering work with cycle time
+        #TODO Add sliders for individual cycle time types
+        if cycleDataFrame is not None:
+            for column, ranking in cycleSliderValues.items():
+                if ranking[1] != 0 or teamCycleFilter[column][0] != 0:
+                    dataFrameToUse = getDataFrame(cycleDataFrame, ranking[0], ranking[4], ranking[5])
+                    if teamCycleFilter[column][0] != 0 and not filterTeam(dataFrameToUse, team, column, teamCycleFilter[column]):
+                        eliminated = True
+                        break
+                    currentScore += getTeamZScoreForColumn(dataFrameToUse, team, column, ranking[1])
         if not eliminated:
             teamZScores[team] = currentScore
     return sorted(teamZScores.items(), key=lambda x: x[1], reverse=True)
