@@ -173,6 +173,18 @@ MULTIPLIED_VALUES = {
     "tele_fuel_hub_success_inactive": {
         "column": "tele_fuel_hub_cycles_inactive",
         "secondColumn": "tele_fuel_per_cycle"
+    },
+    "auto_fuel_hub_miss": {
+        "column": "auto_fuel_hub_cycles_miss",
+        "secondColumn": "auto_fuel_per_cycle"
+    },
+    "tele_fuel_hub_miss_active": {
+        "column": "tele_fuel_hub_cycles_miss_active",
+        "secondColumn": "tele_fuel_per_cycle"
+    },
+    "tele_fuel_hub_miss_inactive": {
+        "column": "tele_fuel_hub_cycles_miss_inactive",
+        "secondColumn": "tele_fuel_per_cycle"
     }
 }
 POINT_VALUES = {
@@ -230,7 +242,7 @@ def getDataFrameFromDatabase(host, user, password, database, table):
 def getCycleDataFrameFromDatabase(host, user, password, database, table):
     data = getDatabaseData(host, user, password, database, table)
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
-    return tinyIntToBoolean(dataFrame, data[2])
+    return filterCycleDataFrameBytype(tinyIntToBoolean(dataFrame, data[2]))
 
 def preProcessDataFrame(dataFrame, dataTypes):
     return accuracyValues(groupValues(pointValues(multiplyValues(tinyIntToBoolean(dataFrame, dataTypes)))))
@@ -253,7 +265,13 @@ def getDataFrameFromCSV(filePath):
 def getCycleDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
     dataFrame, dataTypes = dropDataTypes(dataFrame)
-    return tinyIntToBoolean(dataFrame, dataTypes)
+    return filterCycleDataFrameBytype(tinyIntToBoolean(dataFrame, dataTypes))
+
+def filterCycleDataFrameBytype(cycleDataFrame):
+    cycleTypes = cycleDataFrame["cycle_type"].drop_duplicates().to_list()
+    for cycleType in cycleTypes:
+        cycleDataFrame["cycle_time_" + cycleType] = cycleDataFrame.where(cycleDataFrame["cycle_type"] == cycleType)["cycle_time"]
+    return cycleDataFrame
 
 def dropDataTypes(dataFrame):
     types = dataFrame.iloc[0].values.tolist()
@@ -326,6 +344,24 @@ def getDataFrameForTeam(dataFrame, teamNumber):
 
 def getDataFrameWithoutRobotStops(dataFrame):
     return dataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[0])]
+
+def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
+    filteredCycleDataFrame = cycleDataFrame.copy()
+    for index, row in cycleDataFrame.iterrows():
+        matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"] & dataFrame["match_number"] == row["match_number"] & dataFrame["set_number"] == row["set_number"] & dataFrame["comp_level"] == row["comp_level"])]
+        robotStopValue = matchData["robot_stop"].mode()
+        if robotStopValue != ROBOT_STOP_VALUES[0]:
+            filteredCycleDataFrame.drop(index=index, inplace=True)
+    return filteredCycleDataFrame
+
+def getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame):
+    filteredCycleDataFrame = cycleDataFrame.copy()
+    for index, row in cycleDataFrame.iterrows():
+        matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"] & dataFrame["match_number"] == row["match_number"] & dataFrame["set_number"] == row["set_number"] & dataFrame["comp_level"] == row["comp_level"])]
+        noShowValue = matchData["no_show"].mode()
+        if noShowValue != 0:
+            filteredCycleDataFrame.drop(index=index, inplace=True)
+    return filteredCycleDataFrame
 
 def getDataFrameWithoutNoShows(dataFrame):
     return dataFrame.loc[(dataFrame["no_show"] == 0)]
@@ -649,6 +685,7 @@ def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues
     teams = getAllTeams(dataFrame)
     teamZScores = {}
     dataFrameBuffer = {}
+    cycleDataFrameBuffer = {}
     accuracyBuffer = {}
     for team in teams:
         eliminated = False
@@ -733,11 +770,15 @@ def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues
                     eliminated = True
                     break
                 currentScore += getTeamZScoreForColumn(dataFrameToUse, team, column, ranking[1])
-        #TODO Make robot stops and injures filtering work with cycle time
+        #TODO Add buffering system to improve performance
         #TODO Add sliders for individual cycle time types
         if cycleDataFrame is not None:
             for column, ranking in cycleSliderValues.items():
                 if ranking[1] != 0 or teamCycleFilter[column][0] != 0:
+                    if (ranking[2] == True):
+                        cycleDataFrame = getCycleDataFrameWithoutRobotStops(cycleDataFrame)
+                    if (ranking[3] == True):
+                        cycleDataFrame = getCycleDataFrameWithoutNoShows(cycleDataFrame)
                     dataFrameToUse = getDataFrame(cycleDataFrame, ranking[0], ranking[4], ranking[5])
                     if teamCycleFilter[column][0] != 0 and not filterTeam(dataFrameToUse, team, column, teamCycleFilter[column]):
                         eliminated = True
