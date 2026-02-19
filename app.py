@@ -48,7 +48,7 @@ class TeamLabel(QtWidgets.QWidget):
         self.mainLayout.addWidget(self.teamNumberLabel, stretch=1)
         self.viewStopDetaisButton = QtWidgets.QPushButton(text="View timeline")
         self.viewStopDetaisButton.clicked.connect(self.showStopDetails)
-        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0 or robotStops[3] != 0:
+        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[3] != 0 or any(i != 0 for i in robotStops[2]):
             self.mainLayout.addWidget(self.viewStopDetaisButton)
 
     def showStopDetails(self):
@@ -225,11 +225,12 @@ class StopViewerDialog(QtWidgets.QDialog):
                 self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(self.data[row][column])))
 
 class DataViewerDialog(QtWidgets.QDialog):
-    def __init__(self, dataFrame, title, comboBoxItems, matchFilters, teamFilters, parent=None):
+    def __init__(self, dataFrame, cycleDataFrame, title, comboBoxItems, matchFilters, teamFilters, parent=None):
         super().__init__(parent)
         self.threadPool = QtCore.QThreadPool()
         self.pleaseWaitDialog = None
         self.dataFrame = dataFrame
+        self.cycleDataFrame = cycleDataFrame
         self.matchFilters = matchFilters
         self.teamFilters = teamFilters
         self.mainLayout = QtWidgets.QVBoxLayout()
@@ -264,11 +265,16 @@ class DataViewerDialog(QtWidgets.QDialog):
 
     def addDataAsync(self):
         dataFrame = self.dataFrame
+        cycleDataFrame = self.cycleDataFrame
         if self.ignoreNoShowsCheckBox.isChecked():
             dataFrame = analyzer.getDataFrameWithoutNoShows(dataFrame)
+            if cycleDataFrame is not None:
+                cycleDataFrame = analyzer.getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame)
         if self.ignoreStopsCheckBox.isChecked():
             dataFrame = analyzer.getDataFrameWithoutRobotStops(dataFrame)
-        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), self.matchFilters, self.teamFilters, self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()))
+            if cycleDataFrame is not None:
+                cycleDataFrame = analyzer.getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame)
+        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), cycleDataFrame, self.matchFilters, self.teamFilters, self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()))
         return data
 
     def addData(self):
@@ -632,7 +638,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                     return None
         comboBoxList = ["Total", "Mean", "Median", "Mode", "Max"]
-        dialog = DataViewerDialog(self.dataFrame, "Data Viewer", comboBoxList, self.filter, teamFilters, self)
+        dialog = DataViewerDialog(self.dataFrame, self.cycleDataFrame, "Data Viewer", comboBoxList, self.filter, teamFilters, self)
         dialog.exec()
 
     def addSlider(self, key, isCounted, isCycleSlider=False):

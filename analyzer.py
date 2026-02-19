@@ -140,6 +140,10 @@ ACCURACY_VALUES = {
     "tele_corral_accuracy": ["tele_fuel_corral_success", "tele_fuel_corral_attempt"]
 }
 COUNTED_VALUES = {
+    "auto_no_climb_accuracy": {
+        "column": "auto_climb",
+        "favorableValue": False
+    },
     "auto_climb_accuracy": {
         "column": "auto_climb",
         "favorableValue": True
@@ -348,8 +352,8 @@ def getDataFrameWithoutRobotStops(dataFrame):
 def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
     filteredCycleDataFrame = cycleDataFrame.copy()
     for index, row in cycleDataFrame.iterrows():
-        matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"] & dataFrame["match_number"] == row["match_number"] & dataFrame["set_number"] == row["set_number"] & dataFrame["comp_level"] == row["comp_level"])]
-        robotStopValue = matchData["robot_stop"].mode()
+        matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
+        robotStopValue = matchData["robot_stop"].mode().to_list()[0]
         if robotStopValue != ROBOT_STOP_VALUES[0]:
             filteredCycleDataFrame.drop(index=index, inplace=True)
     return filteredCycleDataFrame
@@ -357,8 +361,8 @@ def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
 def getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame):
     filteredCycleDataFrame = cycleDataFrame.copy()
     for index, row in cycleDataFrame.iterrows():
-        matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"] & dataFrame["match_number"] == row["match_number"] & dataFrame["set_number"] == row["set_number"] & dataFrame["comp_level"] == row["comp_level"])]
-        noShowValue = matchData["no_show"].mode()
+        matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
+        noShowValue = matchData["no_show"].mode().to_list()[0]
         if noShowValue != 0:
             filteredCycleDataFrame.drop(index=index, inplace=True)
     return filteredCycleDataFrame
@@ -542,11 +546,19 @@ def filterTeam(dataFrame, teamNumber, column, filter):
     else:
         return True
     
-def getData(dataFrame, frameType, matchFilter=None, teamFilter=None, q1MinimumFilter=False, q3MaximumFilter=False):
+def getData(dataFrame, frameType, cycleDataFrame=None, matchFilter=None, teamFilter=None, q1MinimumFilter=False, q3MaximumFilter=False):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
+    mainCycleDataFrame = None
+    if cycleDataFrame is not None:
+        mainCycleDataFrame = getDataFrame(cycleDataFrame, frameType, q1MinimumFilter, q3MaximumFilter)
     mainDataFrame = getDataFrame(dataFrame, frameType, q1MinimumFilter, q3MaximumFilter)
     for column in COUNTED_VALUES:
         mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
+    if mainCycleDataFrame is not None:
+        mainDataFrameColumns = getColumns(mainDataFrame)
+        for column in getColumns(mainCycleDataFrame):
+            if column not in mainDataFrameColumns:
+                mainDataFrame[column] = mainCycleDataFrame[column]
     for team in getAllTeams(mainDataFrame):
         for column in teamFilter:
             if not filterTeam(mainDataFrame, team, column, teamFilter[column]):
@@ -770,16 +782,48 @@ def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues
                     eliminated = True
                     break
                 currentScore += getTeamZScoreForColumn(dataFrameToUse, team, column, ranking[1])
-        #TODO Add buffering system to improve performance
-        #TODO Add sliders for individual cycle time types
         if cycleDataFrame is not None:
             for column, ranking in cycleSliderValues.items():
                 if ranking[1] != 0 or teamCycleFilter[column][0] != 0:
-                    if (ranking[2] == True):
-                        cycleDataFrame = getCycleDataFrameWithoutRobotStops(cycleDataFrame)
-                    if (ranking[3] == True):
-                        cycleDataFrame = getCycleDataFrameWithoutNoShows(cycleDataFrame)
-                    dataFrameToUse = getDataFrame(cycleDataFrame, ranking[0], ranking[4], ranking[5])
+                    if ranking[0] not in cycleDataFrameBuffer:
+                        cycleDataFrameBuffer[ranking[0]] = {}
+                    if ranking[4] == False and ranking[5] == False:
+                        bufferToUse = 0
+                    elif ranking[4] == True and ranking[5] == False:
+                        bufferToUse = 1
+                    elif ranking[4] == False and ranking[5] == True:
+                        bufferToUse = 2
+                    elif ranking[4] == True and ranking[5] == True:
+                        bufferToUse = 3
+                    if bufferToUse not in cycleDataFrameBuffer[ranking[0]]:
+                        cycleDataFrameBuffer[ranking[0]][bufferToUse] = [None, None, None, None]
+                    if ranking[2] and ranking[3]:
+                        if cycleDataFrameBuffer[ranking[0]][bufferToUse][3] is None:
+                            dataFrameToGenerate = getCycleDataFrameWithoutNoShows(getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame), dataFrame)
+                            dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5])
+                            cycleDataFrameBuffer[ranking[0]][bufferToUse][3] = dataFrameToUse.copy()
+                        else:
+                            dataFrameToUse = cycleDataFrameBuffer[ranking[0]][bufferToUse][3]
+                    elif ranking[3]:
+                        if cycleDataFrameBuffer[ranking[0]][bufferToUse][2] is None:
+                            dataFrameToGenerate = getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame)
+                            dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5])
+                            cycleDataFrameBuffer[ranking[0]][bufferToUse][2] = dataFrameToUse.copy()
+                        else:
+                            dataFrameToUse = cycleDataFrameBuffer[ranking[0]][bufferToUse][2]
+                    elif ranking[2]:
+                        if cycleDataFrameBuffer[ranking[0]][bufferToUse][1] is None:
+                            dataFrameToGenerate = getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame)
+                            dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5])
+                            cycleDataFrameBuffer[ranking[0]][bufferToUse][1] = dataFrameToUse.copy()
+                        else:
+                            dataFrameToUse = cycleDataFrameBuffer[ranking[0]][bufferToUse][1]
+                    else:
+                        if cycleDataFrameBuffer[ranking[0]][bufferToUse][0] is None:
+                            dataFrameToUse = getDataFrame(cycleDataFrame, ranking[0], ranking[4], ranking[5])
+                            cycleDataFrameBuffer[ranking[0]][bufferToUse][0] = dataFrameToUse.copy()
+                        else:
+                            dataFrameToUse = cycleDataFrameBuffer[ranking[0]][bufferToUse][0]
                     if teamCycleFilter[column][0] != 0 and not filterTeam(dataFrameToUse, team, column, teamCycleFilter[column]):
                         eliminated = True
                         break
