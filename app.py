@@ -27,9 +27,6 @@ class Worker(QtCore.QRunnable):
             self.signals.result.emit(result)
         finally:
             self.signals.finished.emit()
-        result = self.function(*self.args, **self.kwargs)
-        self.signals.result.emit(result)
-        self.signals.finished.emit()
 
 class TeamLabel(QtWidgets.QWidget):
     def __init__(self, teamNumber, zScore, robotStops, parent=None):
@@ -593,17 +590,17 @@ class MainWindow(QtWidgets.QMainWindow):
         if not databaseSucessful:
             filePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Data File")[0]
             if filePath != "":
-                try:
-                    self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
-                    cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Time File")[0]
-                    if cycleFilePath != "":
-                        try:
-                            self.cycleDataFrame = analyzer.getCycleDataFrameFromCSV(cycleFilePath)
-                        except:
-                            QtWidgets.QMessageBox.critical(self, "Error", f"Cannot get cycle time data\n\n{str(e)}")
-                except Exception as e:
+                #try:
+                self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
+                cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Time File")[0]
+                if cycleFilePath != "":
+                    try:
+                        self.cycleDataFrame = analyzer.getCycleDataFrameFromCSV(cycleFilePath)
+                    except:
+                        QtWidgets.QMessageBox.critical(self, "Error", f"Cannot get cycle time data\n\n{str(e)}")
+                '''except Exception as e:
                     QtWidgets.QMessageBox.critical(self, "Error", str(e))
-                    sys.exit()
+                    sys.exit()'''
             else:
                 sys.exit()
         sliders = analyzer.getColumnsForZScore(self.dataFrame)

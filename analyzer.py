@@ -120,25 +120,9 @@ CLIMB_VALUES = ["no_climb", "l1", "l2", "l3"]
 DEFENSE_VALUES = ["no_defense", "some_defense", "mostly_defense"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
 HIGH_CENTER_VALUES = ["no_high_center", "one_high_center", "many_high_centers", "end_high_centers"]
-VALUE_GROUPS = {
-    "auto_fuel_hub_attempt": ["auto_fuel_hub_success", "auto_fuel_hub_miss"],
-    "auto_fuel_corral_attempt": ["auto_fuel_corral_success", "auto_fuel_corral_miss"],
-    "tele_fuel_hub_attempt_active": ["tele_fuel_hub_success_active", "tele_fuel_hub_miss_active"],
-    "tele_fuel_hub_attempt_inactive": ["tele_fuel_hub_success_inactive", "tele_fuel_hub_miss_inactive"],
-    "tele_fuel_hub_success": ["tele_fuel_hub_success_active", "tele_fuel_hub_success_inactive"],
-    "tele_fuel_hub_miss": ["tele_fuel_hub_miss_active", "tele_fuel_hub_miss_inactive"],
-    "tele_fuel_hub_attempt": ["tele_fuel_hub_success", "tele_fuel_hub_miss"],
-    "tele_fuel_corral_attempt": ["tele_fuel_corral_success", "tele_fuel_corral_miss"],
-    "tele_fuel_hub_cycles": ["tele_fuel_hub_cycles_active", "tele_fuel_hub_cycles_inactive"]
-}
-ACCURACY_VALUES = {
-    "auto_fuel_hub_accuracy": ["auto_fuel_hub_success", "auto_fuel_hub_attempt"],
-    "auto_fuel_corral_accuracy": ["auto_fuel_corral_success", "auto_fuel_corral_attempt"],
-    "tele_fuel_hub_accuracy_active": ["tele_fuel_hub_success_active", "tele_fuel_hub_attempt_active"],
-    "tele_fuel_hub_accuracy_inactive": ["tele_fuel_hub_success_inactive", "tele_fuel_hub_attempt_inactive"],
-    "tele_fuel_hub_accuracy": ["tele_fuel_hub_success", "tele_fuel_hub_attempt"],
-    "tele_corral_accuracy": ["tele_fuel_corral_success", "tele_fuel_corral_attempt"]
-}
+VALUE_GROUPS = {}
+ACCURACY_VALUES = {}
+INVERTED_VALUES = ["auto_fuel_hub_percent_miss", "tele_fuel_hub_percent_miss_active"]
 COUNTED_VALUES = {
     "auto_no_climb_accuracy": {
         "column": "auto_climb",
@@ -174,22 +158,14 @@ MULTIPLIED_VALUES = {
         "column": "tele_fuel_hub_cycles_active",
         "secondColumn": "tele_fuel_per_cycle"
     },
-    "tele_fuel_hub_success_inactive": {
-        "column": "tele_fuel_hub_cycles_inactive",
-        "secondColumn": "tele_fuel_per_cycle"
-    },
-    "auto_fuel_hub_miss": {
-        "column": "auto_fuel_hub_cycles_miss",
+    "approx_auto_fuel_hub_success": {
+        "column": "auto_fuel_hub_cycles",
         "secondColumn": "auto_fuel_per_cycle"
     },
-    "tele_fuel_hub_miss_active": {
-        "column": "tele_fuel_hub_cycles_miss_active",
+    "approx_tele_fuel_hub_success_active": {
+        "column": "tele_fuel_hub_cycles_active",
         "secondColumn": "tele_fuel_per_cycle"
     },
-    "tele_fuel_hub_miss_inactive": {
-        "column": "tele_fuel_hub_cycles_miss_inactive",
-        "secondColumn": "tele_fuel_per_cycle"
-    }
 }
 POINT_VALUES = {
     "auto_fuel_hub_points": {
@@ -249,7 +225,7 @@ def getCycleDataFrameFromDatabase(host, user, password, database, table):
     return filterCycleDataFrameBytype(tinyIntToBoolean(dataFrame, data[2]))
 
 def preProcessDataFrame(dataFrame, dataTypes):
-    return accuracyValues(groupValues(pointValues(multiplyValues(tinyIntToBoolean(dataFrame, dataTypes)))))
+    return accuracyValues(groupValues(pointValues(multiplyValues(invertValues(tinyIntToBoolean(dataFrame, dataTypes))))))
 
 def applyTinyIntToBoolean(data):
     return bool(data)
@@ -313,6 +289,11 @@ def multiplyValues(dataFrame):
     for key, value in MULTIPLIED_VALUES.items():
         columnData = dataFrame.apply(applyMultipyValue, args=(value["column"], value["secondColumn"],), axis=1)
         dataFrame.insert(dataFrame.columns.get_loc(value["column"]) + 1, key, columnData)
+    return dataFrame
+
+def invertValues(dataFrame):
+    for key in INVERTED_VALUES:
+        dataFrame[key] = dataFrame[key].apply(lambda v: 100 - v)
     return dataFrame
 
 def applyGroupValues(data, columns):
