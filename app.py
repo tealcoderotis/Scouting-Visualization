@@ -298,8 +298,9 @@ class DataViewerDialog(QtWidgets.QDialog):
                 self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(data[row][column])))
 
 class FilterPoint(QtWidgets.QWidget):
-    def __init__(self, column, filterList=[0, 0.0], dataType="number", parent=None):
+    def __init__(self, column, filterList=[0, 0.0], dataType="number", isCycle=False, parent=None):
         super().__init__(parent)
+        self.isCycle = isCycle
         self.column = column
         self.dataType = dataType
         if type(filterList[1]) == str and (filterList[0] == 3 or filterList[0] == 7):
@@ -430,7 +431,7 @@ class CodeDialog(QtWidgets.QDialog):
                 QtWidgets.QMessageBox.critical(self, "Error", str(e))
 
 class FilterDialog(QtWidgets.QDialog):
-    def __init__(self, filterList, dataFrame, parent=None):
+    def __init__(self, filterList, cycleFilterList, dataFrame, cycleDataFrame, parent=None):
         super().__init__(parent)
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.filterListScrollArea = QtWidgets.QScrollArea()
@@ -459,6 +460,16 @@ class FilterDialog(QtWidgets.QDialog):
             else:
                 widget = FilterPoint(column, value, "string")
             self.filterListLayout.insertWidget(self.filterListLayout.count() - 1, widget)
+        if cycleDataFrame is not None:
+            for column, value in cycleFilterList.items():
+                dataType = analyzer.getDataTypeOfColumn(cycleDataFrame, column)
+                if dataType == "int64" or dataType == "float64":
+                    widget = FilterPoint(column, value, "number", True)
+                elif dataType == "bool":
+                    widget = FilterPoint(column, value, "boolean", True)
+                else:
+                    widget = FilterPoint(column, value, "string", True)
+                self.filterListLayout.insertWidget(self.filterListLayout.count() - 1, widget)
 
     def validateFloats(self):
         for i in range(self.filterListLayout.count()):
@@ -476,10 +487,14 @@ class FilterDialog(QtWidgets.QDialog):
 
     def getFilters(self):
         filter = {}
+        cycleFilter = {}
         for i in range(self.filterListLayout.count()):
             if type(self.filterListLayout.itemAt(i).widget()) == FilterPoint:
-                filter[self.filterListLayout.itemAt(i).widget().column] = self.filterListLayout.itemAt(i).widget().getFilterList()
-        return filter
+                if not self.filterListLayout.itemAt(i).widget().isCycle:
+                    filter[self.filterListLayout.itemAt(i).widget().column] = self.filterListLayout.itemAt(i).widget().getFilterList()
+                else:
+                    cycleFilter[self.filterListLayout.itemAt(i).widget().column] = self.filterListLayout.itemAt(i).widget().getFilterList()
+        return filter, cycleFilter
 
 class PleaseWaitDialog(QtWidgets.QDialog):
     def __init__(self, text="Please wait", parent=None):
@@ -613,6 +628,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filter = {}
         for column in analyzer.getColumns(self.dataFrame):
             self.filter[column] = [0, 0.0]
+        self.cycleFilter = {}
+        if self.cycleDataFrame is not None:
+            for column in analyzer.getColumns(self.cycleDataFrame):
+                self.cycleFilter = {}
         self.updateTeamScores()
         
     def addTeam(self, teamNumber, zScore):
@@ -642,8 +661,8 @@ class MainWindow(QtWidgets.QMainWindow):
         keySlider = KeySlider(key, not isCounted, isCycleSlider)
         self.sliderListLayout.insertWidget(self.sliderListLayout.count() - 1, keySlider)
 
-    def getZScoresAsync(self, dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilters, teamFilters, cycleFilters):
-        return analyzer.rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilters, teamFilters, cycleFilters)
+    def getZScoresAsync(self, dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilters, cycleFilters, teamFilters, cycleTeamFilters):
+        return analyzer.rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilters, cycleFilters, teamFilters, cycleTeamFilters)
 
     def updateTeamScores(self):
         sliderValues = {}
@@ -669,7 +688,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     else:
                         QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                         return None
-        worker = Worker(self.getZScoresAsync, self.dataFrame, self.cycleDataFrame, sliderValues, cycleSliderValues, self.filter, teamFilters, teamCycleFilters)
+        worker = Worker(self.getZScoresAsync, self.dataFrame, self.cycleDataFrame, sliderValues, cycleSliderValues, self.filter, self.cycleFilter, teamFilters, teamCycleFilters)
         worker.signals.result.connect(self.addZScoresToUi)
         worker.signals.error.connect(self.showErrorDialog)
         self.threadPool.start(worker)
@@ -722,9 +741,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtWidgets.QMessageBox.warning(self, "Warning", "One or more slider values is not in the file")
 
     def editFilters(self):
-        dialog = FilterDialog(self.filter, self.dataFrame, self)
+        dialog = FilterDialog(self.filter, self.cycleFilter, self.dataFrame, self.cycleDataFrame, self)
         if dialog.exec() == 1:
-            self.filter = dialog.getFilters()
+            self.filter = dialog.getFilters()[0]
+            self.cycleFilter = dialog.getFilters()[1]
 
     def saveFilters(self):
         filePath = QtWidgets.QFileDialog.getSaveFileName(self, filter="JSON files (*.json)")[0]
@@ -740,6 +760,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         return None
             finalObject = {
                 "match": self.filter,
+                "matchCycle": self.cycleFilter,
                 "team": teamFilters
             }
             jsonFile = json.dumps(finalObject)
@@ -756,6 +777,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 jsonFile = json.loads(file.read())
                 file.close()
                 self.filter = jsonFile["match"]
+                self.cycleFilter = jsonFile["matchCycle"]
                 teamFilter = jsonFile["team"]
                 for i in range(self.sliderListLayout.count()):
                     if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:

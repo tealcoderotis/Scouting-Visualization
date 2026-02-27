@@ -527,8 +527,10 @@ def filterTeam(dataFrame, teamNumber, column, filter):
     else:
         return True
     
-def getData(dataFrame, frameType, cycleDataFrame=None, matchFilter=None, teamFilter=None, q1MinimumFilter=False, q3MaximumFilter=False):
+def getData(dataFrame, frameType, cycleDataFrame=None, matchFilter=None, cycleFilter=None, teamFilter=None, q1MinimumFilter=False, q3MaximumFilter=False):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
+    if cycleDataFrame is not None:
+        cycleDataFrame = filterDataFrame(cycleDataFrame, cycleFilter)
     mainCycleDataFrame = None
     if cycleDataFrame is not None:
         mainCycleDataFrame = getDataFrame(cycleDataFrame, frameType, q1MinimumFilter, q3MaximumFilter)
@@ -673,8 +675,10 @@ def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
         newDataFrame.loc[i, finalName] = accuracy
     return newDataFrame
 
-def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilter=None, teamFilter=None, teamCycleFilter=None):
+def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilter=None, cycleFilter=None, teamFilter=None, teamCycleFilter=None):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
+    if cycleDataFrame is not None:
+        cycleDataFrame = filterDataFrame(cycleDataFrame, cycleFilter)
     teams = getAllTeams(dataFrame)
     teamZScores = {}
     dataFrameBuffer = {}
