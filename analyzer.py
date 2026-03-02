@@ -123,6 +123,10 @@ HIGH_CENTER_VALUES = ["no_high_center", "one_high_center", "many_high_centers", 
 VALUE_GROUPS = {}
 ACCURACY_VALUES = {}
 INVERTED_VALUES = ["auto_fuel_hub_percent_miss", "tele_fuel_hub_percent_miss_active"]
+INVERTED_VALUES = {
+    "auto_fuel_hub_accuracy": "auto_fuel_hub_percent_miss",
+    "tele_fuel_hub_accuracy_active": "tele_fuel_hub_percent_miss_active"
+}
 COUNTED_VALUES = {
     "auto_no_climb_accuracy": {
         "column": "auto_climb",
@@ -292,8 +296,10 @@ def multiplyValues(dataFrame):
     return dataFrame
 
 def invertValues(dataFrame):
-    for key in INVERTED_VALUES:
-        dataFrame[key] = dataFrame[key].apply(lambda v: 100 - v)
+    for key, value in INVERTED_VALUES.items():
+        columnData = dataFrame[value].apply(lambda v: 100 - v)
+        dataFrame.insert(dataFrame.columns.get_loc(value) + 1, key, columnData)
+        dataFrame.drop(columns=[value])
     return dataFrame
 
 def applyGroupValues(data, columns):
@@ -527,7 +533,7 @@ def filterTeam(dataFrame, teamNumber, column, filter):
     else:
         return True
     
-def getData(dataFrame, frameType, cycleDataFrame=None, matchFilter=None, cycleFilter=None, teamFilter=None, q1MinimumFilter=False, q3MaximumFilter=False):
+def getData(dataFrame, frameType, cycleDataFrame=None, matchFilter=None, teamFilter=None, cycleFilter=None, q1MinimumFilter=False, q3MaximumFilter=False):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
     if cycleDataFrame is not None:
         cycleDataFrame = filterDataFrame(cycleDataFrame, cycleFilter)

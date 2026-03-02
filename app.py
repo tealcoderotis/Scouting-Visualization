@@ -222,13 +222,14 @@ class StopViewerDialog(QtWidgets.QDialog):
                 self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(self.data[row][column])))
 
 class DataViewerDialog(QtWidgets.QDialog):
-    def __init__(self, dataFrame, cycleDataFrame, title, comboBoxItems, matchFilters, teamFilters, parent=None):
+    def __init__(self, dataFrame, cycleDataFrame, title, comboBoxItems, matchFilters, cycleMatchFilters, teamFilters, parent=None):
         super().__init__(parent)
         self.threadPool = QtCore.QThreadPool()
         self.pleaseWaitDialog = None
         self.dataFrame = dataFrame
         self.cycleDataFrame = cycleDataFrame
         self.matchFilters = matchFilters
+        self.cycleMatchFilters = cycleMatchFilters
         self.teamFilters = teamFilters
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainLayout)
@@ -271,7 +272,7 @@ class DataViewerDialog(QtWidgets.QDialog):
             dataFrame = analyzer.getDataFrameWithoutRobotStops(dataFrame)
             if cycleDataFrame is not None:
                 cycleDataFrame = analyzer.getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame)
-        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), cycleDataFrame, self.matchFilters, self.teamFilters, self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()))
+        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), cycleDataFrame, self.matchFilters, self.teamFilters, self.cycleMatchFilters, self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()))
         return data
 
     def addData(self):
@@ -631,7 +632,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cycleFilter = {}
         if self.cycleDataFrame is not None:
             for column in analyzer.getColumns(self.cycleDataFrame):
-                self.cycleFilter = {}
+                self.cycleFilter[column] = [0, 0.0]
         self.updateTeamScores()
         
     def addTeam(self, teamNumber, zScore):
@@ -654,7 +655,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                     return None
         comboBoxList = ["Total", "Mean", "Median", "Mode", "Max"]
-        dialog = DataViewerDialog(self.dataFrame, self.cycleDataFrame, "Data Viewer", comboBoxList, self.filter, teamFilters, self)
+        dialog = DataViewerDialog(self.dataFrame, self.cycleDataFrame, "Data Viewer", comboBoxList, self.filter, self.cycleFilter, teamFilters, self)
         dialog.exec()
 
     def addSlider(self, key, isCounted, isCycleSlider=False):
@@ -786,7 +787,6 @@ class MainWindow(QtWidgets.QMainWindow):
                             slider.updateFilter(teamFilter[slider.getKey()])
                         else:
                             valueNotInJson = True
-
             except Exception as e:
                 QtWidgets.QMessageBox.critical(self, "Error", f"Filters have been loaded up until the error\n\n{str(e)}")
             if valueNotInJson:
