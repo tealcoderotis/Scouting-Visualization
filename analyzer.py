@@ -3,6 +3,10 @@ import pandas
 from io import StringIO
 from math import isnan, nan
 
+#TODO: Add rotinue to add overall cycle accuracy as a ranking metric
+#TODO: Readd robot stop filters if in Google Form (disable no show buttons and disable robot stop button if not in Google Form)
+#TODO: Systems and math check!
+
 '''CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
 ROBOT_INJURE_VALUES = ["no_injure", "fixed_injure", "end_injure"]
@@ -115,45 +119,112 @@ POINT_VALUES = {
     }
 }'''
 
-NOT_DATA_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance", "device"]
-CLIMB_VALUES = ["no_climb", "l1", "l2", "l3"]
-DEFENSE_VALUES = ["no_defense", "some_defense", "mostly_defense"]
-ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
-HIGH_CENTER_VALUES = ["no_high_center", "one_high_center", "many_high_centers", "end_high_centers"]
+#NOT_DATA_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance", "device"]
+NOT_DATA_COLUMNS = ["Timestamp", "Scouter Name", "Team", "team_number"]
+CLIMB_VALUES = ["No Climb", "Lev 1", "Lev 2", "Lev 3"]
+HUB_ACTIVE_STRATEGY_VALUES = ["Cycling Middle Section", "Ferrying to Alliance", "Human Player Cycles", "Defense"]
+HUB_INACTIVE_STRATEGY_VALUES = ["Defense", "Ferry", "Fill Hopper", "Human Player Drop Off"]
+TRAVEL_CAPABILITY_VALUES = ["Bump", "Trench"]
+AUTO_LEAVE_VALUES = ["Yes", "No", "Yes but ended in started area, no leave points"]
+#DEFENSE_VALUES = ["no_defense", "some_defense", "mostly_defense"]
+#ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
+#HIGH_CENTER_VALUES = ["no_high_center", "one_high_center", "many_high_centers", "end_high_centers"]
 VALUE_GROUPS = {}
 ACCURACY_VALUES = {}
-INVERTED_VALUES = ["auto_fuel_hub_percent_miss", "tele_fuel_hub_percent_miss_active"]
-INVERTED_VALUES = {
+INVERTED_VALUES = {}
+#INVERTED_VALUES = ["auto_fuel_hub_percent_miss", "tele_fuel_hub_percent_miss_active"]
+'''INVERTED_VALUES = {
     "auto_fuel_hub_accuracy": "auto_fuel_hub_percent_miss",
     "tele_fuel_hub_accuracy_active": "tele_fuel_hub_percent_miss_active"
-}
-COUNTED_VALUES = {
+}'''
+COUNTED_VALUES = {}
+for value in AUTO_LEAVE_VALUES:
+    COUNTED_VALUES[f"Auto Leave? {value}"] = {
+        "column": "Auto Leave?",
+        "favorableValue": value
+    }
+for value in CLIMB_VALUES:
+    COUNTED_VALUES[f"Auto Climb {value}"] = {
+        "column": "Auto Climb",
+        "favorableValue": value
+    }
+for value in CLIMB_VALUES:
+    COUNTED_VALUES[f"Climb {value}"] = {
+        "column": "Climb",
+        "favorableValue": value
+    }
+for value in HUB_ACTIVE_STRATEGY_VALUES:
+    COUNTED_VALUES[f"Hub Active {value}"] = {
+        "column": "Hub Active",
+        "favorableValue": value
+    }
+for value in HUB_INACTIVE_STRATEGY_VALUES:
+    COUNTED_VALUES[f"Hub Inactivated {value}"] = {
+        "column": "Hub Inactivated",
+        "favorableValue": value
+    }
+for value in TRAVEL_CAPABILITY_VALUES:
+    COUNTED_VALUES[f"Travel Capability {value}"] = {
+        "column": "Travel Capability",
+        "favorableValue": value
+    }
+
+'''COUNTED_VALUES = {
+    "auto_no_leave_accuracy": {
+        "column": "auto_leave",
+        "favorable_value": AUTO_LEAVE_VALUES[0]
+    },
+    "auto_leave_accuracy": {
+        "column": "auto_leave",
+        "favorable_value": AUTO_LEAVE_VALUES[1]
+    },
+    "auto_start_end_accuracy": {
+        "column": "auto_leave",
+        "favorable_value": AUTO_LEAVE_VALUES[2]
+    },
+    "tele_active_strategy_shoot_accuracy": {
+        "column": "tele_hub_active_strategy",
+        "favorable_value": HUB_ACTIVE_STRATEGY_VALUES[0]
+    },
     "auto_no_climb_accuracy": {
         "column": "auto_climb",
         "favorableValue": False
     },
     "auto_climb_accuracy": {
         "column": "auto_climb",
-        "favorableValue": True
+        "favorableValue": "No Climb"
+    },
+    "auto_l1_climb_accuracy": {
+        "column": "auto_climb",
+        "favorableValue": "Lev 1"
+    },
+    "auto_l2_climb_accuracy": {
+        "column": "auto_climb",
+        "favorableValue": "Lev 2"
+    },
+    "auto_l3_climb_accuracy": {
+        "column": "auto_climb",
+        "favorableValue": "Lev 3"
     },
     "tele_no_climb_accuracy": {
         "column": "tele_climb",
-        "favorableValue": "no_climb"
+        "favorableValue": "No Climb"
     },
     "tele_l1_climb_accuracy": {
         "column": "tele_climb",
-        "favorableValue": "l1"
+        "favorableValue": "Lev 1"
     },
     "tele_l2_climb_accuracy": {
         "column": "tele_climb",
-        "favorableValue": "l2"
+        "favorableValue": "Lev 2"
     },
     "tele_l3_climb_accuracy": {
         "column": "tele_climb",
-        "favorableValue": "l3"
+        "favorableValue": "Lev 3"
     }
-}
-MULTIPLIED_VALUES = {
+}'''
+MULTIPLIED_VALUES = {}
+'''MULTIPLIED_VALUES = {
     "auto_fuel_hub_success": {
         "column": "auto_fuel_hub_cycles",
         "secondColumn": "auto_fuel_per_cycle"
@@ -170,8 +241,9 @@ MULTIPLIED_VALUES = {
         "column": "tele_fuel_hub_cycles_active",
         "secondColumn": "tele_fuel_per_cycle"
     },
-}
-POINT_VALUES = {
+}'''
+POINT_VALUES = {}
+'''POINT_VALUES = {
     "auto_fuel_hub_points": {
         "column": "auto_fuel_hub_success",
         "pointValue": 1
@@ -189,9 +261,15 @@ POINT_VALUES = {
         "dropdown": CLIMB_VALUES,
         "pointValue": [0, 10, 20, 30]
     }
-}
+}'''
 NOT_DATA_CYCLE_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "device", "cycle_number"]
 CYCLE_TYPES = ["auto_fuel_hub_success", "tele_fuel_hub_success_active", "tele_fuel_hub_success_inactive"]
+ALL_CYCLES = []
+for i in range(1, 16, 1):
+    ALL_CYCLES.append(f"Teleop Cycle {i} Accuracy")
+ADD_NON_NULL_VALUES = {
+    "Total Teleop Cycles": ALL_CYCLES
+}
 
 def getDatabaseData(host, user, password, database, table):
     db = mysql.connector.connect(host=host, user=user, password=password, buffered=True)
@@ -228,8 +306,25 @@ def getCycleDataFrameFromDatabase(host, user, password, database, table):
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
     return filterCycleDataFrameBytype(tinyIntToBoolean(dataFrame, data[2]))
 
-def preProcessDataFrame(dataFrame, dataTypes):
-    return accuracyValues(groupValues(pointValues(multiplyValues(invertValues(tinyIntToBoolean(dataFrame, dataTypes))))))
+def removeTeamNames(dataFrame):
+    dataFrame["team_number"] = dataFrame["Team"].apply(lambda v: v[:v.find(" ")])
+    dataFrame.drop(columns=["Team"])
+    return dataFrame
+
+def applyAddNonNullValues(row, newColumn):
+    nonNulls = 0
+    for column in ADD_NON_NULL_VALUES[newColumn]:
+        if (not isnan(row[column])) and row[column] is not None:
+            nonNulls += 1
+    return nonNulls
+
+def addNonNulls(dataFrame):
+    for key in ADD_NON_NULL_VALUES.keys():
+        dataFrame.insert(dataFrame.columns.get_loc(ADD_NON_NULL_VALUES[key][-1]) + 1, key, dataFrame.apply(applyAddNonNullValues, axis=1, args=(key,)))
+    return dataFrame
+
+def preProcessDataFrame(dataFrame):
+    return accuracyValues(groupValues(pointValues(multiplyValues(addNonNulls(invertValues(removeTeamNames(dataFrame)))))))
 
 def applyTinyIntToBoolean(data):
     return bool(data)
@@ -243,13 +338,11 @@ def tinyIntToBoolean(dataFrame, dataTypes):
 
 def getDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
-    dataFrame, dataTypes = dropDataTypes(dataFrame)
-    return preProcessDataFrame(dataFrame, dataTypes)
+    return preProcessDataFrame(dataFrame)
 
 def getCycleDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
-    dataFrame, dataTypes = dropDataTypes(dataFrame)
-    return filterCycleDataFrameBytype(tinyIntToBoolean(dataFrame, dataTypes))
+    return filterCycleDataFrameBytype(tinyIntToBoolean(dataFrame))
 
 def filterCycleDataFrameBytype(cycleDataFrame):
     cycleTypes = cycleDataFrame["cycle_type"].drop_duplicates().to_list()

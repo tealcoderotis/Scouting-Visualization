@@ -5,6 +5,11 @@ import json
 from pathlib import Path
 from os import path, environ
 
+if len(sys.argv) >= 2 and sys.argv[1] == "--debug":
+    DEBUG = True
+else:
+    DEBUG = False
+
 class WorkerSignals(QtCore.QObject):
     finished = QtCore.pyqtSignal()
     error = QtCore.pyqtSignal(Exception)
@@ -19,14 +24,19 @@ class Worker(QtCore.QRunnable):
         self.signals = WorkerSignals()
 
     def run(self):
-        try:
+        if DEBUG:
             result = self.function(*self.args, **self.kwargs)
-        except Exception as e:
-            self.signals.error.emit(e)
-        else:
             self.signals.result.emit(result)
-        finally:
             self.signals.finished.emit()
+        else:  
+            try:
+                result = self.function(*self.args, **self.kwargs)
+            except Exception as e:
+                self.signals.error.emit(e)
+            else:
+                self.signals.result.emit(result)
+            finally:
+                self.signals.finished.emit()
 
 class TeamLabel(QtWidgets.QWidget):
     def __init__(self, teamNumber, zScore, robotStops, parent=None):
@@ -585,7 +595,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("Scouting Visualization")
         self.showMaximized()
         databaseSucessful = False
-        configPath = programDirectory / "config.json"
+        '''configPath = programDirectory / "config.json"
         if path.exists(configPath):
             file = open(configPath, "r")
             config = json.loads(file.read())
@@ -602,21 +612,24 @@ class MainWindow(QtWidgets.QMainWindow):
                     if result != QtWidgets.QMessageBox.Yes:
                         sys.exit()
                 else:
-                    databaseSucessful = True
+                    databaseSucessful = True'''
         if not databaseSucessful:
             filePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Data File")[0]
             if filePath != "":
-                #try:
-                self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
-                cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Time File")[0]
-                if cycleFilePath != "":
+                if DEBUG:
+                    self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
+                else:
                     try:
-                        self.cycleDataFrame = analyzer.getCycleDataFrameFromCSV(cycleFilePath)
-                    except:
-                        QtWidgets.QMessageBox.critical(self, "Error", f"Cannot get cycle time data\n\n{str(e)}")
-                '''except Exception as e:
-                    QtWidgets.QMessageBox.critical(self, "Error", str(e))
-                    sys.exit()'''
+                        self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
+                        '''cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Time File")[0]
+                        if cycleFilePath != "":
+                            try:
+                                self.cycleDataFrame = analyzer.getCycleDataFrameFromCSV(cycleFilePath)
+                            except:
+                                QtWidgets.QMessageBox.critical(self, "Error", f"Cannot get cycle time data\n\n{str(e)}")'''
+                    except Exception as e:
+                        QtWidgets.QMessageBox.critical(self, "Error", str(e))
+                        sys.exit()
             else:
                 sys.exit()
         sliders = analyzer.getColumnsForZScore(self.dataFrame)
@@ -636,7 +649,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updateTeamScores()
         
     def addTeam(self, teamNumber, zScore):
-        teamLabel = TeamLabel(teamNumber, zScore, analyzer.getTotalRobotStopsForEachType(self.dataFrame, teamNumber))
+        #teamLabel = TeamLabel(teamNumber, zScore, analyzer.getTotalRobotStopsForEachType(self.dataFrame, teamNumber))
+        teamLabel = TeamLabel(teamNumber, zScore, [[], [], [], 0])
         self.teamListLayout.insertWidget(self.teamListLayout.count() - 1, teamLabel)
 
     def showStopDetailsDialog(self, teamNumber):
