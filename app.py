@@ -55,7 +55,8 @@ class TeamLabel(QtWidgets.QWidget):
         self.mainLayout.addWidget(self.teamNumberLabel, stretch=1)
         self.viewStopDetaisButton = QtWidgets.QPushButton(text="View timeline")
         self.viewStopDetaisButton.clicked.connect(self.showStopDetails)
-        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[3] != 0 or any(i != 0 for i in robotStops[2]):
+        #if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[3] != 0 or any(i != 0 for i in robotStops[2]):
+        if True:
             self.mainLayout.addWidget(self.viewStopDetaisButton)
 
     def showStopDetails(self):
@@ -102,8 +103,10 @@ class KeySlider(QtWidgets.QWidget):
         self.checkBoxLayout = QtWidgets.QHBoxLayout()
         self.checkBoxLayout.addStretch()
         self.ignoreNoShowsCheckbox = QtWidgets.QCheckBox(text="Ignore no shows")
+        self.ignoreNoShowsCheckbox.setEnabled(False)
         self.checkBoxLayout.addWidget(self.ignoreNoShowsCheckbox)
         self.ignoreStopsAndInjuresCheckbox = QtWidgets.QCheckBox(text="Ignore stops and injures")
+        self.ignoreStopsAndInjuresCheckbox.setEnabled(False)
         self.checkBoxLayout.addWidget(self.ignoreStopsAndInjuresCheckbox)
         self.q1MinimumCheckBox = QtWidgets.QCheckBox(text="Q1 Minimum")
         self.q3MaximumCheckBox = QtWidgets.QCheckBox(text="Q3 Maximum")
@@ -248,9 +251,11 @@ class DataViewerDialog(QtWidgets.QDialog):
         self.dataComboBox.currentIndexChanged.connect(lambda: self.addData())
         self.mainLayout.addWidget(self.dataComboBox)
         self.ignoreNoShowsCheckBox = QtWidgets.QCheckBox(text="Ignore no shows")
+        self.ignoreNoShowsCheckBox.setEnabled(False)
         self.ignoreNoShowsCheckBox.clicked.connect(lambda: self.addData())
         self.mainLayout.addWidget(self.ignoreNoShowsCheckBox)
         self.ignoreStopsCheckBox = QtWidgets.QCheckBox(text="Ignore stops and injues")
+        self.ignoreStopsCheckBox.setEnabled(False)
         self.ignoreStopsCheckBox.clicked.connect(lambda: self.addData())
         self.mainLayout.addWidget(self.ignoreStopsCheckBox)
         self.q1MinimumCheckBox = QtWidgets.QCheckBox(text="Q1 Minimum")

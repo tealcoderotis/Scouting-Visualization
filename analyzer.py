@@ -120,8 +120,9 @@ POINT_VALUES = {
 }'''
 
 #NOT_DATA_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance", "device"]
-NOT_DATA_COLUMNS = ["Timestamp", "Scouter Name", "Team", "team_number"]
+NOT_DATA_COLUMNS = ["Timestamp", "Scouter Name", "Team", "team_number", "Match Number"]
 CLIMB_VALUES = ["No Climb", "Lev 1", "Lev 2", "Lev 3"]
+SHOT_PRELOAD_VALUES = ["No", "Yes"]
 HUB_ACTIVE_STRATEGY_VALUES = ["Cycling Middle Section", "Ferrying to Alliance", "Human Player Cycles", "Defense"]
 HUB_INACTIVE_STRATEGY_VALUES = ["Defense", "Ferry", "Fill Hopper", "Human Player Drop Off"]
 TRAVEL_CAPABILITY_VALUES = ["Bump", "Trench"]
@@ -141,6 +142,11 @@ COUNTED_VALUES = {}
 for value in AUTO_LEAVE_VALUES:
     COUNTED_VALUES[f"Auto Leave? {value}"] = {
         "column": "Auto Leave?",
+        "favorableValue": value
+    }
+for value in SHOT_PRELOAD_VALUES:
+    COUNTED_VALUES[f"Shot Preload {value}"] = {
+        "column": "Shot Preload",
         "favorableValue": value
     }
 for value in CLIMB_VALUES:
@@ -469,8 +475,9 @@ def getTotalRobotStopsForEachType(dataFrame, teamNumber):
 
 def getStopDetails(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
-    teamDataFrame = teamDataFrame.sort_values(by=["match_number"])
-    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["high_center"]  != HIGH_CENTER_VALUES[0]) | (dataFrame["no_show"]  != False) | (dataFrame["defense"] != DEFENSE_VALUES[0])][["timestamp", "match_number", "robot_stop", "high_center",  "defense", "no_show"]]
+    teamDataFrame = teamDataFrame.sort_values(by=["Match Number"])
+    #robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["high_center"]  != HIGH_CENTER_VALUES[0]) | (dataFrame["no_show"]  != False) | (dataFrame["defense"] != DEFENSE_VALUES[0])][["timestamp", "match_number", "robot_stop", "high_center",  "defense", "no_show"]]
+    robotStops = teamDataFrame.loc[(dataFrame["Notes"] != "") & (dataFrame["Notes"] != None) & (dataFrame["Notes"] == dataFrame["Notes"])][["Match Number", "Notes"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
 
 def getColumns(dataFrame):
@@ -650,6 +657,7 @@ def getData(dataFrame, frameType, cycleDataFrame=None, matchFilter=None, teamFil
     return mainDataFrame
 
 def getDataFrame(dataFrame, frameType, q1MinimumFilter=False, q3MaximumFilter=False):
+    dataFrame = dropNaN(dataFrame)
     if frameType == 0:
         mainDataFrame = getTotalDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 1:
