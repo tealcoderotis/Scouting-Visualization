@@ -657,7 +657,6 @@ def getData(dataFrame, frameType, cycleDataFrame=None, matchFilter=None, teamFil
     return mainDataFrame
 
 def getDataFrame(dataFrame, frameType, q1MinimumFilter=False, q3MaximumFilter=False):
-    dataFrame = dropNaN(dataFrame)
     if frameType == 0:
         mainDataFrame = getTotalDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 1:
@@ -767,6 +766,10 @@ def getMaxDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
             newDataFrame.loc[newDataFrame.index[i], column] = dataFrameToUse[column].max()
     return newDataFrame
 
+def applyGetAccuracyDataFrame(row, column, favorableValue):
+    values = str(row[column]).split(", ")
+    return favorableValue in values
+
 def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
@@ -775,6 +778,7 @@ def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
         newDataFrame.loc[i, "team_number"] = teams[i]
         totalValues = teamDataFrame[column].dropna().shape[0]
         favorableValues = teamDataFrame.loc[(dataFrame[column] == favorableColumn)].shape[0]
+        #favorableValues = teamDataFrame[dataFrame.apply(applyGetAccuracyDataFrame, axis=1, args=(column, favorableColumn))].shape[0]
         if totalValues == 0:
             accuracy = nan
         else:
