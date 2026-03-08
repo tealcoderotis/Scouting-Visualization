@@ -313,7 +313,7 @@ def getCycleDataFrameFromDatabase(host, user, password, database, table):
     return filterCycleDataFrameBytype(tinyIntToBoolean(dataFrame, data[2]))
 
 def removeTeamNames(dataFrame):
-    dataFrame["team_number"] = dataFrame["Team"].apply(lambda v: v[:v.find(" ")])
+    dataFrame["team_number"] = dataFrame["Team"].apply(lambda v: str(v)[:str(v).find(" ")])
     dataFrame.drop(columns=["Team"])
     return dataFrame
 
