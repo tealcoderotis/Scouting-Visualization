@@ -119,17 +119,14 @@ POINT_VALUES = {
     }
 }'''
 
-#NOT_DATA_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance", "device"]
-NOT_DATA_COLUMNS = ["Timestamp", "Scouter Name", "Team", "team_number", "Match Number"]
-CLIMB_VALUES = ["No Climb", "Lev 1", "Lev 2", "Lev 3"]
-SHOT_PRELOAD_VALUES = ["No", "Yes"]
-HUB_ACTIVE_STRATEGY_VALUES = ["Cycling Middle Section", "Ferrying to Alliance", "Human Player Cycles", "Defense"]
-HUB_INACTIVE_STRATEGY_VALUES = ["Defense", "Ferry", "Fill Hopper", "Human Player Drop Off"]
-TRAVEL_CAPABILITY_VALUES = ["Bump", "Trench"]
-AUTO_LEAVE_VALUES = ["Yes", "No", "Yes but ended in started area, no leave points"]
-#DEFENSE_VALUES = ["no_defense", "some_defense", "mostly_defense"]
-#ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
-#HIGH_CENTER_VALUES = ["no_high_center", "one_high_center", "many_high_centers", "end_high_centers"]
+NOT_DATA_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance", "device"]
+CLIMB_VALUES = ["no_climb", "l1", "l2", "l3"]
+SHOT_PRELOAD_VALUES = [False, True]
+HUB_ACTIVE_STRATEGY_VALUES = ["cycling", "ferry", "human", "defense"]
+HUB_INACTIVE_STRATEGY_VALUES = ["defense", "ferry", "hopper", "human", "defense"]
+TRAVEL_CAPABILITY_VALUES = ["bump", "trench"]
+ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stop", "end_stop"]
+HIGH_CENTER_VALUES = ["no_high_center", "one_high_center", "many_high_center", "end_high_center"]
 VALUE_GROUPS = {}
 ACCURACY_VALUES = {}
 INVERTED_VALUES = {}
@@ -139,39 +136,34 @@ INVERTED_VALUES = {}
     "tele_fuel_hub_accuracy_active": "tele_fuel_hub_percent_miss_active"
 }'''
 COUNTED_VALUES = {}
-for value in AUTO_LEAVE_VALUES:
-    COUNTED_VALUES[f"Auto Leave? {value}"] = {
-        "column": "Auto Leave?",
-        "favorableValue": value
-    }
 for value in SHOT_PRELOAD_VALUES:
-    COUNTED_VALUES[f"Shot Preload {value}"] = {
-        "column": "Shot Preload",
+    COUNTED_VALUES[f"auto_shot_preload_{value}"] = {
+        "column": "auto_shot_preload",
         "favorableValue": value
     }
 for value in CLIMB_VALUES:
-    COUNTED_VALUES[f"Auto Climb {value}"] = {
-        "column": "Auto Climb",
+    COUNTED_VALUES[f"auto_climb_{value}"] = {
+        "column": "auto_climb",
         "favorableValue": value
     }
 for value in CLIMB_VALUES:
-    COUNTED_VALUES[f"Climb {value}"] = {
-        "column": "Climb",
+    COUNTED_VALUES[f"climb_{value}"] = {
+        "column": "tele_climb",
         "favorableValue": value
     }
 for value in HUB_ACTIVE_STRATEGY_VALUES:
-    COUNTED_VALUES[f"Hub Active {value}"] = {
-        "column": "Hub Active",
+    COUNTED_VALUES[f"tele_hub_active_strategy_{value}"] = {
+        "column": "tele_hub_active_strategy",
         "favorableValue": value
     }
 for value in HUB_INACTIVE_STRATEGY_VALUES:
-    COUNTED_VALUES[f"Hub Inactivated {value}"] = {
-        "column": "Hub Inactivated",
+    COUNTED_VALUES[f"tele_hub_inactive_strategy_{value}"] = {
+        "column": "tele_hub_inactive_strategy",
         "favorableValue": value
     }
 for value in TRAVEL_CAPABILITY_VALUES:
-    COUNTED_VALUES[f"Travel Capability {value}"] = {
-        "column": "Travel Capability",
+    COUNTED_VALUES[f"travel_capability_{value}"] = {
+        "column": "travel_capability",
         "favorableValue": value
     }
 
@@ -269,13 +261,7 @@ POINT_VALUES = {}
     }
 }'''
 NOT_DATA_CYCLE_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "device", "cycle_number"]
-CYCLE_TYPES = ["auto_fuel_hub_success", "tele_fuel_hub_success_active", "tele_fuel_hub_success_inactive"]
-ALL_CYCLES = []
-for i in range(1, 16, 1):
-    ALL_CYCLES.append(f"Teleop Cycle {i} Accuracy")
-ADD_NON_NULL_VALUES = {
-    "Total Teleop Cycles": ALL_CYCLES
-}
+NOT_DATA_TBA_COLUMS = ["team_number"]
 
 def getDatabaseData(host, user, password, database, table):
     db = mysql.connector.connect(host=host, user=user, password=password, buffered=True)
@@ -312,25 +298,8 @@ def getCycleDataFrameFromDatabase(host, user, password, database, table):
     dataFrame = pandas.DataFrame(data[1], columns=data[0])
     return filterCycleDataFrameBytype(tinyIntToBoolean(dataFrame, data[2]))
 
-def removeTeamNames(dataFrame):
-    dataFrame["team_number"] = dataFrame["Team"].apply(lambda v: str(v)[:str(v).find(" ")])
-    dataFrame.drop(columns=["Team"])
-    return dataFrame
-
-def applyAddNonNullValues(row, newColumn):
-    nonNulls = 0
-    for column in ADD_NON_NULL_VALUES[newColumn]:
-        if (not isnan(row[column])) and row[column] is not None:
-            nonNulls += 1
-    return nonNulls
-
-def addNonNulls(dataFrame):
-    for key in ADD_NON_NULL_VALUES.keys():
-        dataFrame.insert(dataFrame.columns.get_loc(ADD_NON_NULL_VALUES[key][-1]) + 1, key, dataFrame.apply(applyAddNonNullValues, axis=1, args=(key,)))
-    return dataFrame
-
 def preProcessDataFrame(dataFrame):
-    return accuracyValues(groupValues(pointValues(multiplyValues(addNonNulls(invertValues(removeTeamNames(dataFrame)))))))
+    return accuracyValues(groupValues(pointValues(multiplyValues(invertValues(dataFrame)))))
 
 def applyTinyIntToBoolean(data):
     return bool(data)
@@ -344,11 +313,17 @@ def tinyIntToBoolean(dataFrame, dataTypes):
 
 def getDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
-    return preProcessDataFrame(dataFrame)
+    dataFrame, dataTypes = dropDataTypes(dataFrame)
+    return preProcessDataFrame(tinyIntToBoolean(dataFrame, dataTypes))
 
 def getCycleDataFrameFromCSV(filePath):
     dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
-    return filterCycleDataFrameBytype(tinyIntToBoolean(dataFrame))
+    dataFrame, dataTypes = dropDataTypes(dataFrame)
+    return tinyIntToBoolean(dataFrame, dataTypes)
+
+def getGenericDataFrameFromCSV(filePath):
+    dataFrame = pandas.read_csv(filePath, sep=",", engine="python")
+    return dataFrame
 
 def filterCycleDataFrameBytype(cycleDataFrame):
     cycleTypes = cycleDataFrame["cycle_type"].drop_duplicates().to_list()
@@ -467,16 +442,12 @@ def getTotalRobotStopsForEachType(dataFrame, teamNumber):
         robotStops = teamDataFrame.loc[(dataFrame["high_center"] == HIGH_CENTER_VALUES[i])].shape[0]
         highCenterList.append(robotStops)
     noShows = teamDataFrame.loc[(dataFrame["no_show"] != False)].shape[0]
-    defenseList = []
-    for i in range(1, len(DEFENSE_VALUES)):
-        robotStops = teamDataFrame.loc[(dataFrame["defense"] == DEFENSE_VALUES[i])].shape[0]
-        defenseList.append(robotStops)
-    return [stopList, highCenterList, defenseList, noShows]
+    return [stopList, highCenterList, noShows]
 
 def getStopDetails(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
     teamDataFrame = teamDataFrame.sort_values(by=["Match Number"])
-    #robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["high_center"]  != HIGH_CENTER_VALUES[0]) | (dataFrame["no_show"]  != False) | (dataFrame["defense"] != DEFENSE_VALUES[0])][["timestamp", "match_number", "robot_stop", "high_center",  "defense", "no_show"]]
+    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["high_center"]  != HIGH_CENTER_VALUES[0]) | (dataFrame["no_show"]  != False) | ((dataFrame["notes"] != "") & (dataFrame["notes"] != None) & (dataFrame["notes"] == dataFrame["notes"]))][["match_number", "robot_stop", "high_center", "no_show", "notes"]]
     robotStops = teamDataFrame.loc[(dataFrame["Notes"] != "") & (dataFrame["Notes"] != None) & (dataFrame["Notes"] == dataFrame["Notes"])][["Match Number", "Notes"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
 
@@ -504,6 +475,16 @@ def getColumnsForCycleZScore(dataFrame):
     columnsToReturn = []
     for i in range(len(columns)):
         if columns[i] not in NOT_DATA_CYCLE_COLUMNS:
+            if dataTypes[i] == "int64" or dataTypes[i] == "float64":
+                columnsToReturn.append(columns[i])
+    return columnsToReturn
+
+def getColumnsForTBAZScore(dataFrame):
+    columns = getColumns(dataFrame)
+    dataTypes = dataFrame.dtypes.values.tolist()
+    columnsToReturn = []
+    for i in range(len(columns)):
+        if columns[i] not in NOT_DATA_TBA_COLUMS:
             if dataTypes[i] == "int64" or dataTypes[i] == "float64":
                 columnsToReturn.append(columns[i])
     return columnsToReturn
@@ -633,7 +614,7 @@ def filterTeam(dataFrame, teamNumber, column, filter):
     else:
         return True
     
-def getData(dataFrame, frameType, cycleDataFrame=None, matchFilter=None, teamFilter=None, cycleFilter=None, q1MinimumFilter=False, q3MaximumFilter=False):
+def getData(dataFrame, frameType, cycleDataFrame=None, tbaDataFrame=None, matchFilter=None, teamFilter=None, cycleFilter=None, teamCycleFilter=None, teamTbaFilter=None, q1MinimumFilter=False, q3MaximumFilter=False):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
     if cycleDataFrame is not None:
         cycleDataFrame = filterDataFrame(cycleDataFrame, cycleFilter)
@@ -648,11 +629,26 @@ def getData(dataFrame, frameType, cycleDataFrame=None, matchFilter=None, teamFil
         for column in getColumns(mainCycleDataFrame):
             if column not in mainDataFrameColumns:
                 mainDataFrame[column] = mainCycleDataFrame[column]
+    if tbaDataFrame is not None:
+        mainDataFrameColumns = getColumns(mainDataFrame)
+        for column in getColumns(tbaDataFrame):
+            if column not in mainDataFrameColumns:
+                mainDataFrame[column] = tbaDataFrame[column]
     for team in getAllTeams(mainDataFrame):
         for column in teamFilter:
             if not filterTeam(mainDataFrame, team, column, teamFilter[column]):
                 mainDataFrame.drop(dataFrame.loc[(dataFrame["team_number"] == team)].index, inplace=True)
                 break
+        if teamCycleFilter != None:
+            for column in teamCycleFilter:
+                if not filterTeam(mainDataFrame, team, column, teamCycleFilter[column]):
+                    mainDataFrame.drop(dataFrame.loc[(dataFrame["team_number"] == team)].index, inplace=True)
+                    break
+        if teamTbaFilter != None:
+            for column in teamTbaFilter:
+                if not filterTeam(mainDataFrame, team, column, teamTbaFilter[column]):
+                    mainDataFrame.drop(dataFrame.loc[(dataFrame["team_number"] == team)].index, inplace=True)
+                    break
     mainDataFrame.sort_values(by="team_number", inplace=True)
     return mainDataFrame
 
@@ -777,8 +773,8 @@ def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
         teamDataFrame = getDataFrameForTeam(dataFrame, teams[i])
         newDataFrame.loc[i, "team_number"] = teams[i]
         totalValues = teamDataFrame[column].dropna().shape[0]
-        favorableValues = teamDataFrame.loc[(dataFrame[column] == favorableColumn)].shape[0]
-        #favorableValues = teamDataFrame[dataFrame.apply(applyGetAccuracyDataFrame, axis=1, args=(column, favorableColumn))].shape[0]
+        #favorableValues = teamDataFrame.loc[(dataFrame[column] == favorableColumn)].shape[0]
+        favorableValues = teamDataFrame[dataFrame.apply(applyGetAccuracyDataFrame, axis=1, args=(column, favorableColumn))].shape[0]
         if totalValues == 0:
             accuracy = nan
         else:
@@ -786,7 +782,7 @@ def getAccuracyDataFrame(dataFrame, column, favorableColumn, finalName):
         newDataFrame.loc[i, finalName] = accuracy
     return newDataFrame
 
-def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilter=None, cycleFilter=None, teamFilter=None, teamCycleFilter=None):
+def rankTeamsByZScore(dataFrame, cycleDataFrame, tbaDataFrame, sliderValues, cycleSliderValues, tbaSliderValues, matchFilter=None, cycleFilter=None, teamFilter=None, teamCycleFilter=None, teamTbaFilter=None):
     dataFrame = filterDataFrame(dataFrame, matchFilter)
     if cycleDataFrame is not None:
         cycleDataFrame = filterDataFrame(cycleDataFrame, cycleFilter)
@@ -924,6 +920,13 @@ def rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues
                         eliminated = True
                         break
                     currentScore += getTeamZScoreForColumn(dataFrameToUse, team, column, ranking[1])
+        if tbaDataFrame is not None:
+            for column, ranking in tbaSliderValues.items():
+                if ranking[1] != 0 or teamTbaFilter[column][0] != 0:
+                    if teamTbaFilter[column][0] != 0 and not filterTeam(tbaDataFrame, team, column, teamTbaFilter[column]):
+                        eliminated = True
+                        break
+                    currentScore += getTeamZScoreForColumn(tbaDataFrame, team, column, ranking[1])
         if not eliminated:
             teamZScores[team] = currentScore
     return sorted(teamZScores.items(), key=lambda x: x[1], reverse=True)

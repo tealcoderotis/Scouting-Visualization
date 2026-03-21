@@ -77,9 +77,10 @@ class UnscrollableSlider(QtWidgets.QSlider):
         pass
 
 class KeySlider(QtWidgets.QWidget):
-    def __init__(self, key, comboBoxAvaliable=True, isCycleSlider=False, parent=None):
+    def __init__(self, key, comboBoxAvaliable=True, isCycleSlider=False, isTbaSlider=False, parent=None):
         super().__init__(parent)
         self.isCycleSlider = isCycleSlider
+        self.isTbaSlider = isTbaSlider
         self.key = key
         self.filterCode = ""
         self.mainLayout = QtWidgets.QVBoxLayout()
@@ -104,15 +105,16 @@ class KeySlider(QtWidgets.QWidget):
         self.checkBoxLayout.addStretch()
         self.ignoreNoShowsCheckbox = QtWidgets.QCheckBox(text="Ignore no shows")
         self.ignoreNoShowsCheckbox.setEnabled(False)
-        self.checkBoxLayout.addWidget(self.ignoreNoShowsCheckbox)
         self.ignoreStopsAndInjuresCheckbox = QtWidgets.QCheckBox(text="Ignore stops and injures")
         self.ignoreStopsAndInjuresCheckbox.setEnabled(False)
-        self.checkBoxLayout.addWidget(self.ignoreStopsAndInjuresCheckbox)
         self.q1MinimumCheckBox = QtWidgets.QCheckBox(text="Q1 Minimum")
         self.q3MaximumCheckBox = QtWidgets.QCheckBox(text="Q3 Maximum")
         if comboBoxAvaliable:
             self.checkBoxLayout.addWidget(self.q1MinimumCheckBox)
             self.checkBoxLayout.addWidget(self.q3MaximumCheckBox)
+        if not isTbaSlider:
+            self.checkBoxLayout.addWidget(self.ignoreNoShowsCheckbox)
+            self.checkBoxLayout.addWidget(self.ignoreStopsAndInjuresCheckbox)
         self.checkBoxWidget.setLayout(self.checkBoxLayout)
         self.mainLayout.addWidget(self.checkBoxWidget)
         self.filterWidget = QtWidgets.QWidget()
@@ -235,15 +237,18 @@ class StopViewerDialog(QtWidgets.QDialog):
                 self.mainTable.setItem(row - 1, column, QtWidgets.QTableWidgetItem(str(self.data[row][column])))
 
 class DataViewerDialog(QtWidgets.QDialog):
-    def __init__(self, dataFrame, cycleDataFrame, title, comboBoxItems, matchFilters, cycleMatchFilters, teamFilters, parent=None):
+    def __init__(self, dataFrame, cycleDataFrame, tbaDataFrame, title, comboBoxItems, matchFilters, cycleMatchFilters, teamFilters, cycleTeamFilters, tbaTeamFilters, parent=None):
         super().__init__(parent)
         self.threadPool = QtCore.QThreadPool()
         self.pleaseWaitDialog = None
         self.dataFrame = dataFrame
         self.cycleDataFrame = cycleDataFrame
+        self.tbaDataFrame = tbaDataFrame
         self.matchFilters = matchFilters
         self.cycleMatchFilters = cycleMatchFilters
         self.teamFilters = teamFilters
+        self.cycleTeamFilters = cycleTeamFilters
+        self.tbaTeamFilters = tbaTeamFilters
         self.mainLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainLayout)
         self.dataComboBox = QtWidgets.QComboBox()
@@ -279,6 +284,7 @@ class DataViewerDialog(QtWidgets.QDialog):
     def addDataAsync(self):
         dataFrame = self.dataFrame
         cycleDataFrame = self.cycleDataFrame
+        tbaDataFrame = self.tbaDataFrame
         if self.ignoreNoShowsCheckBox.isChecked():
             dataFrame = analyzer.getDataFrameWithoutNoShows(dataFrame)
             if cycleDataFrame is not None:
@@ -287,7 +293,7 @@ class DataViewerDialog(QtWidgets.QDialog):
             dataFrame = analyzer.getDataFrameWithoutRobotStops(dataFrame)
             if cycleDataFrame is not None:
                 cycleDataFrame = analyzer.getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame)
-        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), cycleDataFrame, self.matchFilters, self.teamFilters, self.cycleMatchFilters, self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()))
+        data = analyzer.dataFrameToList(analyzer.getData(dataFrame, self.dataComboBox.currentIndex(), cycleDataFrame, tbaDataFrame, self.matchFilters, self.teamFilters, self.cycleMatchFilters, self.cycleTeamFilters, self.tbaTeamFilters, self.q1MinimumCheckBox.isChecked(), self.q3MaximumCheckBox.isChecked()))
         return data
 
     def addData(self):
@@ -539,6 +545,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__(parent)
         self.dataFrame = None
         self.cycleDataFrame = None
+        self.tbaDataFrame = None
         self.pleaseWaitDialog = None
         self.threadPool = QtCore.QThreadPool()
         self.mainWidget = QtWidgets.QWidget()
@@ -623,33 +630,49 @@ class MainWindow(QtWidgets.QMainWindow):
             if filePath != "":
                 if DEBUG:
                     self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
+                    cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Time File")[0]
+                    if cycleFilePath != "":
+                        self.cycleDataFrame = analyzer.getCycleDataFrameFromCSV(cycleFilePath)
                 else:
                     try:
                         self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
-                        '''cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Time File")[0]
+                        cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Accuracy File")[0]
                         if cycleFilePath != "":
                             try:
                                 self.cycleDataFrame = analyzer.getCycleDataFrameFromCSV(cycleFilePath)
                             except:
-                                QtWidgets.QMessageBox.critical(self, "Error", f"Cannot get cycle time data\n\n{str(e)}")'''
+                                QtWidgets.QMessageBox.critical(self, "Error", f"Cannot get cycle accuracy data\n\n{str(e)}")
                     except Exception as e:
                         QtWidgets.QMessageBox.critical(self, "Error", str(e))
                         sys.exit()
             else:
                 sys.exit()
+        tbaFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open TBA File")[0]
+        if tbaFilePath != "":
+            if DEBUG:
+                self.tbaDataFrame = analyzer.getGenericDataFrameFromCSV(tbaFilePath)
+            else:
+                try:
+                    self.tbaDataFrame = analyzer.getGenericDataFrameFromCSV(tbaFilePath)
+                except:
+                    QtWidgets.QMessageBox.critical(self, "Error", f"Cannot get TBA data\n\n{str(e)}")
         sliders = analyzer.getColumnsForZScore(self.dataFrame)
         for slider in sliders[0]:
             self.addSlider(slider, slider in sliders[1])
         if (self.cycleDataFrame is not None):
             cycleSliders = analyzer.getColumnsForCycleZScore(self.cycleDataFrame)
             for slider in cycleSliders:
-                self.addSlider(slider, False, True)
+                self.addSlider(slider, False, True, False)
+        if (self.tbaDataFrame is not None):
+            tbaSliders = analyzer.getColumnsForTBAZScore(self.tbaDataFrame)
+            for slider in tbaSliders:
+                self.addSlider(slider, True, False, True)
         self.filter = {}
         for column in analyzer.getColumns(self.dataFrame):
             self.filter[column] = [0, 0.0]
         self.cycleFilter = {}
         if self.cycleDataFrame is not None:
-            for column in analyzer.getColumns(self.cycleDataFrame):
+            for column in analyzer.getColumnsForTBAZScore(self.cycleDataFrame):
                 self.cycleFilter[column] = [0, 0.0]
         self.updateTeamScores()
         
@@ -665,34 +688,50 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def showDataViewDialog(self):
         teamFilters = {}
+        teamCycleFilters = {}
+        teamTbaFilters = {}
         for i in range(self.sliderListLayout.count()):
             if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
-                if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
-                    filter = self.sliderListLayout.itemAt(i).widget().getFilter()
-                    teamFilters[filter[0]] = filter[1]
+                if (not self.sliderListLayout.itemAt(i).widget().isCycleSlider) and (not self.sliderListLayout.itemAt(i).widget().isTbaSlider):
+                    if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
+                        filter = self.sliderListLayout.itemAt(i).widget().getFilter()
+                        teamFilters[filter[0]] = filter[1]
+                    else:
+                        QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
+                        return None
+                elif (not self.sliderListLayout.itemAt(i).widget().isTbaSlider):
+                    if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
+                        filter = self.sliderListLayout.itemAt(i).widget().getFilter()
+                        teamCycleFilters[filter[0]] = filter[1]
+                    else:
+                        QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
+                        return None
                 else:
-                    QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
-                    return None
+                    if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
+                        filter = self.sliderListLayout.itemAt(i).widget().getFilter()
+                        teamTbaFilters[filter[0]] = filter[1]
+                    else:
+                        QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
+                        return None
         comboBoxList = ["Total", "Mean", "Median", "Mode", "Max"]
-        dialog = DataViewerDialog(self.dataFrame, self.cycleDataFrame, "Data Viewer", comboBoxList, self.filter, self.cycleFilter, teamFilters, self)
+        dialog = DataViewerDialog(self.dataFrame, self.cycleDataFrame, self.tbaDataFrame, "Data Viewer", comboBoxList, self.filter, self.cycleFilter, teamFilters, teamCycleFilters, teamTbaFilters,  self)
         dialog.exec()
 
-    def addSlider(self, key, isCounted, isCycleSlider=False):
-        keySlider = KeySlider(key, not isCounted, isCycleSlider)
+    def addSlider(self, key, isCounted, isCycleSlider=False, isTbaSlider=False):
+        keySlider = KeySlider(key, not isCounted, isCycleSlider, isTbaSlider)
         self.sliderListLayout.insertWidget(self.sliderListLayout.count() - 1, keySlider)
-
-    def getZScoresAsync(self, dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilters, cycleFilters, teamFilters, cycleTeamFilters):
-        return analyzer.rankTeamsByZScore(dataFrame, cycleDataFrame, sliderValues, cycleSliderValues, matchFilters, cycleFilters, teamFilters, cycleTeamFilters)
 
     def updateTeamScores(self):
         sliderValues = {}
         cycleSliderValues = {}
+        tbaSliderValues = {}
         teamFilters = {}
         teamCycleFilters = {}
+        teamTbaFilters = {}
         for i in range(self.sliderListLayout.count()):
             if type(self.sliderListLayout.itemAt(i).widget()) == KeySlider:
                 values = self.sliderListLayout.itemAt(i).widget().getValues()
-                if not self.sliderListLayout.itemAt(i).widget().isCycleSlider:
+                if (not self.sliderListLayout.itemAt(i).widget().isCycleSlider) and (not self.sliderListLayout.itemAt(i).widget().isTbaSlider):
                     sliderValues[values[0]] = values[1]
                     if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
                         filter = self.sliderListLayout.itemAt(i).widget().getFilter()
@@ -700,7 +739,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     else:
                         QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                         return None
-                else:
+                elif (not self.sliderListLayout.itemAt(i).widget().isTbaSlider):
                     cycleSliderValues[values[0]] = values[1]
                     if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
                         filter = self.sliderListLayout.itemAt(i).widget().getFilter()
@@ -708,7 +747,15 @@ class MainWindow(QtWidgets.QMainWindow):
                     else:
                         QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
                         return None
-        worker = Worker(self.getZScoresAsync, self.dataFrame, self.cycleDataFrame, sliderValues, cycleSliderValues, self.filter, self.cycleFilter, teamFilters, teamCycleFilters)
+                else:
+                    tbaSliderValues[values[0]] = values[1]
+                    if self.sliderListLayout.itemAt(i).widget().validateFilterValue():
+                        filter = self.sliderListLayout.itemAt(i).widget().getFilter()
+                        teamTbaFilters[filter[0]] = filter[1]
+                    else:
+                        QtWidgets.QMessageBox.critical(self, "Error", f"{self.sliderListLayout.itemAt(i).widget().key} has an invalid value")
+                        return None
+        worker = Worker(analyzer.rankTeamsByZScore, self.dataFrame, self.cycleDataFrame, self.tbaDataFrame, sliderValues, cycleSliderValues, tbaSliderValues, self.filter, self.cycleFilter, teamFilters, teamCycleFilters, teamTbaFilters)
         worker.signals.result.connect(self.addZScoresToUi)
         worker.signals.error.connect(self.showErrorDialog)
         self.threadPool.start(worker)
