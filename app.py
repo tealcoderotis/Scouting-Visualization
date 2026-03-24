@@ -104,9 +104,7 @@ class KeySlider(QtWidgets.QWidget):
         self.checkBoxLayout = QtWidgets.QHBoxLayout()
         self.checkBoxLayout.addStretch()
         self.ignoreNoShowsCheckbox = QtWidgets.QCheckBox(text="Ignore no shows")
-        self.ignoreNoShowsCheckbox.setEnabled(False)
         self.ignoreStopsAndInjuresCheckbox = QtWidgets.QCheckBox(text="Ignore stops and injures")
-        self.ignoreStopsAndInjuresCheckbox.setEnabled(False)
         self.q1MinimumCheckBox = QtWidgets.QCheckBox(text="Q1 Minimum")
         self.q3MaximumCheckBox = QtWidgets.QCheckBox(text="Q3 Maximum")
         if comboBoxAvaliable:
@@ -256,11 +254,9 @@ class DataViewerDialog(QtWidgets.QDialog):
         self.dataComboBox.currentIndexChanged.connect(lambda: self.addData())
         self.mainLayout.addWidget(self.dataComboBox)
         self.ignoreNoShowsCheckBox = QtWidgets.QCheckBox(text="Ignore no shows")
-        self.ignoreNoShowsCheckBox.setEnabled(False)
         self.ignoreNoShowsCheckBox.clicked.connect(lambda: self.addData())
         self.mainLayout.addWidget(self.ignoreNoShowsCheckBox)
         self.ignoreStopsCheckBox = QtWidgets.QCheckBox(text="Ignore stops and injues")
-        self.ignoreStopsCheckBox.setEnabled(False)
         self.ignoreStopsCheckBox.clicked.connect(lambda: self.addData())
         self.mainLayout.addWidget(self.ignoreStopsCheckBox)
         self.q1MinimumCheckBox = QtWidgets.QCheckBox(text="Q1 Minimum")
@@ -672,7 +668,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.filter[column] = [0, 0.0]
         self.cycleFilter = {}
         if self.cycleDataFrame is not None:
-            for column in analyzer.getColumnsForTBAZScore(self.cycleDataFrame):
+            for column in self.cycleDataFrame:
                 self.cycleFilter[column] = [0, 0.0]
         self.updateTeamScores()
         
