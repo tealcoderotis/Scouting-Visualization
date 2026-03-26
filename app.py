@@ -47,8 +47,8 @@ class TeamLabel(QtWidgets.QWidget):
         self.mainLayout = QtWidgets.QHBoxLayout()
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setLayout(self.mainLayout)
-        if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[3] != 0 or any(i != 0 for i in robotStops[2]):
-            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score; ({', '.join(map(str, robotStops[0]))}) robot stops; ({', '.join(map(str, robotStops[1]))}) high centers; ({', '.join(map(str, robotStops[2]))}) defense matches; {robotStops[3]} no shows")
+        if robotStops[0] != 0 or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0:
+            self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score; {robotStops[0]} robot stops; ({', '.join(map(str, robotStops[1]))}) high centers; {robotStops[2]} no shows")
         else:
             self.teamNumberLabel = QtWidgets.QLabel(text=f"{self.teamNumber}; {zScore} z-score")
         self.teamNumberLabel.setWordWrap(True)
@@ -56,7 +56,7 @@ class TeamLabel(QtWidgets.QWidget):
         self.viewStopDetaisButton = QtWidgets.QPushButton(text="View timeline")
         self.viewStopDetaisButton.clicked.connect(self.showStopDetails)
         #if any(i != 0 for i in robotStops[0]) or any(i != 0 for i in robotStops[1]) or robotStops[3] != 0 or any(i != 0 for i in robotStops[2]):
-        if True:
+        if robotStops[0] != 0 or any(i != 0 for i in robotStops[1]) or robotStops[2] != 0 or robotStops[3] != 0:
             self.mainLayout.addWidget(self.viewStopDetaisButton)
 
     def showStopDetails(self):
@@ -673,8 +673,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updateTeamScores()
         
     def addTeam(self, teamNumber, zScore):
-        #teamLabel = TeamLabel(teamNumber, zScore, analyzer.getTotalRobotStopsForEachType(self.dataFrame, teamNumber))
-        teamLabel = TeamLabel(teamNumber, zScore, [[], [], [], 0])
+        teamLabel = TeamLabel(teamNumber, zScore, analyzer.getTotalRobotStopsForEachType(self.dataFrame, teamNumber))
         self.teamListLayout.insertWidget(self.teamListLayout.count() - 1, teamLabel)
 
     def showStopDetailsDialog(self, teamNumber):

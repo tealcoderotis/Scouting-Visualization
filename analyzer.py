@@ -120,12 +120,13 @@ POINT_VALUES = {
 }'''
 
 NOT_DATA_COLUMNS = ["primary_key", "team_number", "comp_level", "set_number", "match_number", "timestamp", "scouter_name", "scouting_team", "no_show", "competition", "alliance", "device"]
-CLIMB_VALUES = ["no_climb", "l1", "l2", "l3"]
+CLIMB_VALUES = [False, True]
 SHOT_PRELOAD_VALUES = [False, True]
-HUB_ACTIVE_STRATEGY_VALUES = ["cycling", "ferry", "human", "defense"]
-HUB_INACTIVE_STRATEGY_VALUES = ["defense", "ferry", "hopper", "human", "defense"]
-TRAVEL_CAPABILITY_VALUES = ["bump", "trench"]
-ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stop", "end_stop"]
+CYCLING_STRATEGY_VALUES = [False, True]
+FERRY_STRATEGY_VALUES = [False, True]
+DEFENSE_STRATEGY_VALUES = [False, True]
+TRENCH_CAPABILITY_VALUES = [False, True]
+BUMP_CAPABILITY_VALUES = [False, True]
 HIGH_CENTER_VALUES = ["no_high_center", "one_high_center", "many_high_center", "end_high_center"]
 VALUE_GROUPS = {}
 ACCURACY_VALUES = {}
@@ -146,24 +147,34 @@ for value in CLIMB_VALUES:
         "column": "auto_climb",
         "favorableValue": value
     }
+for value in CYCLING_STRATEGY_VALUES:
+    COUNTED_VALUES[f"cycling_strategy_{value}"] = {
+        "column": "cycling_strategy",
+        "favorableValue": value
+    }
+for value in FERRY_STRATEGY_VALUES:
+    COUNTED_VALUES[f"ferry_strategy_{value}"] = {
+        "column": "ferry_strategy",
+        "favorableValue": value
+    }
+for value in DEFENSE_STRATEGY_VALUES:
+    COUNTED_VALUES[f"defense_strategy_{value}"] = {
+        "column": "defense_strategy",
+        "favorableValue": value
+    }
+for value in TRENCH_CAPABILITY_VALUES:
+    COUNTED_VALUES[f"trench_capability_{value}"] = {
+        "column": "trench_capability",
+        "favorableValue": value
+    }
+for value in BUMP_CAPABILITY_VALUES:
+    COUNTED_VALUES[f"bump_capability_{value}"] = {
+        "column": "bump_capability",
+        "favorableValue": value
+    }
 for value in CLIMB_VALUES:
-    COUNTED_VALUES[f"climb_{value}"] = {
+    COUNTED_VALUES[f"tele_climb_{value}"] = {
         "column": "tele_climb",
-        "favorableValue": value
-    }
-for value in HUB_ACTIVE_STRATEGY_VALUES:
-    COUNTED_VALUES[f"tele_hub_active_strategy_{value}"] = {
-        "column": "tele_hub_active_strategy",
-        "favorableValue": value
-    }
-for value in HUB_INACTIVE_STRATEGY_VALUES:
-    COUNTED_VALUES[f"tele_hub_inactive_strategy_{value}"] = {
-        "column": "tele_hub_inactive_strategy",
-        "favorableValue": value
-    }
-for value in TRAVEL_CAPABILITY_VALUES:
-    COUNTED_VALUES[f"travel_capability_{value}"] = {
-        "column": "travel_capability",
         "favorableValue": value
     }
 
@@ -408,14 +419,14 @@ def getDataFrameForTeam(dataFrame, teamNumber):
     return dataFrame[dataFrame["team_number"].values == teamNumber]
 
 def getDataFrameWithoutRobotStops(dataFrame):
-    return dataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[0])]
+    return dataFrame.loc[(dataFrame["robot_stop"] == False)]
 
 def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
     filteredCycleDataFrame = cycleDataFrame.copy()
     for index, row in cycleDataFrame.iterrows():
         matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
         robotStopValue = matchData["robot_stop"].mode().to_list()[0]
-        if robotStopValue != ROBOT_STOP_VALUES[0]:
+        if robotStopValue != False:
             filteredCycleDataFrame.drop(index=index, inplace=True)
     return filteredCycleDataFrame
 
@@ -424,31 +435,29 @@ def getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame):
     for index, row in cycleDataFrame.iterrows():
         matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
         noShowValue = matchData["no_show"].mode().to_list()[0]
-        if noShowValue != 0:
+        if noShowValue != False:
             filteredCycleDataFrame.drop(index=index, inplace=True)
     return filteredCycleDataFrame
 
 def getDataFrameWithoutNoShows(dataFrame):
-    return dataFrame.loc[(dataFrame["no_show"] == 0)]
+    return dataFrame.loc[(dataFrame["no_show"] == True)]
 
 def getTotalRobotStopsForEachType(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
-    stopList = []
-    for i in range(1, len(ROBOT_STOP_VALUES)):
-        robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] == ROBOT_STOP_VALUES[i])].shape[0]
-        stopList.append(robotStops)
+    stops = teamDataFrame.loc[(dataFrame["robot_stop"] != False)].shape[0]
     highCenterList = []
     for i in range(1, len(HIGH_CENTER_VALUES)):
         robotStops = teamDataFrame.loc[(dataFrame["high_center"] == HIGH_CENTER_VALUES[i])].shape[0]
         highCenterList.append(robotStops)
     noShows = teamDataFrame.loc[(dataFrame["no_show"] != False)].shape[0]
-    return [stopList, highCenterList, noShows]
+    notes = teamDataFrame.loc[((dataFrame["notes"] != "") & (dataFrame["notes"] != None) & (dataFrame["notes"] == dataFrame["notes"]))].shape[0]
+    return [stops, highCenterList, noShows, notes]
 
 def getStopDetails(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
-    teamDataFrame = teamDataFrame.sort_values(by=["Match Number"])
-    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != ROBOT_STOP_VALUES[0]) | (dataFrame["high_center"]  != HIGH_CENTER_VALUES[0]) | (dataFrame["no_show"]  != False) | ((dataFrame["notes"] != "") & (dataFrame["notes"] != None) & (dataFrame["notes"] == dataFrame["notes"]))][["match_number", "robot_stop", "high_center", "no_show", "notes"]]
-    robotStops = teamDataFrame.loc[(dataFrame["Notes"] != "") & (dataFrame["Notes"] != None) & (dataFrame["Notes"] == dataFrame["Notes"])][["Match Number", "Notes"]]
+    teamDataFrame = teamDataFrame.sort_values(by=["match_number"])
+    robotStops = teamDataFrame.loc[(dataFrame["robot_stop"] != False) | (dataFrame["high_center"]  != HIGH_CENTER_VALUES[0]) | (dataFrame["no_show"]  != False) | ((dataFrame["notes"] != "") & (dataFrame["notes"] != None) & (dataFrame["notes"] == dataFrame["notes"]))][["match_number", "robot_stop", "high_center", "no_show", "notes"]]
+    #robotStops = teamDataFrame.loc[(dataFrame["Notes"] != "") & (dataFrame["Notes"] != None) & (dataFrame["Notes"] == dataFrame["Notes"])][["Match Number", "Notes"]]
     return [getColumns(robotStops)] + robotStops.values.tolist()
 
 def getColumns(dataFrame):
