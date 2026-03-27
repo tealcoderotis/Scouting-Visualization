@@ -422,28 +422,21 @@ def getDataFrameWithoutRobotStops(dataFrame):
     return dataFrame.loc[(dataFrame["robot_stop"] == False)]
 
 def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
-    indexesToDrop = []
     filteredCycleDataFrame = cycleDataFrame.copy()
     for index, row in cycleDataFrame.iterrows():
         matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
         robotStopValue = matchData["robot_stop"].mode().to_list()[0]
-        print(robotStopValue)
-        if robotStopValue == True:
-            indexesToDrop.append(index)
-    print(indexesToDrop)
-    filteredCycleDataFrame.drop(index=indexesToDrop, inplace=True)
+        if robotStopValue != False:
+            filteredCycleDataFrame.drop(index=dataFrame.index[index], inplace=True)
     return filteredCycleDataFrame
 
 def getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame):
-    indexesToDrop = []
     filteredCycleDataFrame = cycleDataFrame.copy()
     for index, row in cycleDataFrame.iterrows():
         matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
         noShowValue = matchData["no_show"].mode().to_list()[0]
-        print(noShowValue)
-        if noShowValue == True:
-            indexesToDrop.append(index)
-    filteredCycleDataFrame.drop(index=indexesToDrop, inplace=True)
+        if noShowValue != False:
+            filteredCycleDataFrame.drop(index=dataFrame.index[index], inplace=True)
     return filteredCycleDataFrame
 
 def getDataFrameWithoutNoShows(dataFrame):
@@ -636,7 +629,7 @@ def getData(dataFrame, frameType, cycleDataFrame=None, tbaDataFrame=None, matchF
         cycleDataFrame = filterDataFrame(cycleDataFrame, cycleFilter)
     mainCycleDataFrame = None
     if cycleDataFrame is not None:
-        mainCycleDataFrame = getDataFrame(cycleDataFrame, frameType, q1MinimumFilter, q3MaximumFilter, True)
+        mainCycleDataFrame = getDataFrame(cycleDataFrame, frameType, q1MinimumFilter, q3MaximumFilter)
     mainDataFrame = getDataFrame(dataFrame, frameType, q1MinimumFilter, q3MaximumFilter)
     for column in COUNTED_VALUES:
         mainDataFrame[column] = getAccuracyDataFrame(dataFrame, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)[column]
@@ -668,27 +661,24 @@ def getData(dataFrame, frameType, cycleDataFrame=None, tbaDataFrame=None, matchF
     mainDataFrame.sort_values(by="team_number", inplace=True)
     return mainDataFrame
 
-def getDataFrame(dataFrame, frameType, q1MinimumFilter=False, q3MaximumFilter=False, cycled=False):
+def getDataFrame(dataFrame, frameType, q1MinimumFilter=False, q3MaximumFilter=False):
     if frameType == 0:
-        mainDataFrame = getTotalDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter, cycled)
+        mainDataFrame = getTotalDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 1:
-        mainDataFrame = getAverageDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter, cycled)
+        mainDataFrame = getAverageDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 2:
-        mainDataFrame = getMedianDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter, cycled)
+        mainDataFrame = getMedianDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 3:
-        mainDataFrame = getModeDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter, cycled)
+        mainDataFrame = getModeDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     elif frameType == 4:
-        mainDataFrame = getMaxDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter, cycled)
+        mainDataFrame = getMaxDataFrame(dataFrame, q1MinimumFilter, q3MaximumFilter)
     return mainDataFrame
 
 def dataFrameToList(dataFrame):
     return [getColumns(dataFrame)] + dataFrame.values.tolist()
 
-def getTotalDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, cycled=False):
-    if cycled:
-        allColumns = getColumnsForCycleZScore(dataFrame)
-    else:
-        allColumns = getColumnsForZScore(dataFrame)
+def getTotalDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
+    allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
@@ -705,11 +695,8 @@ def getTotalDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, c
             newDataFrame.loc[newDataFrame.index[i], column] = dataFrameToUse[column].sum()
     return newDataFrame
 
-def getAverageDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, cycled=False):
-    if cycled:
-        allColumns = getColumnsForCycleZScore(dataFrame)
-    else:
-        allColumns = getColumnsForZScore(dataFrame)
+def getAverageDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
+    allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
@@ -726,11 +713,8 @@ def getAverageDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False,
             newDataFrame.loc[newDataFrame.index[i], column] = dataFrameToUse[column].mean()
     return newDataFrame
 
-def getMedianDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, cycled=False):
-    if cycled:
-        allColumns = getColumnsForCycleZScore(dataFrame)
-    else:
-        allColumns = getColumnsForZScore(dataFrame)
+def getMedianDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
+    allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
@@ -747,11 +731,8 @@ def getMedianDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, 
             newDataFrame.loc[newDataFrame.index[i], column] = dataFrameToUse[column].median()
     return newDataFrame
 
-def getModeDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, cycled=False):
-    if cycled:
-        allColumns = getColumnsForCycleZScore(dataFrame)
-    else:
-        allColumns = getColumnsForZScore(dataFrame)
+def getModeDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
+    allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
@@ -772,11 +753,8 @@ def getModeDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, cy
                 newDataFrame.loc[newDataFrame.index[i], column] = nan
     return newDataFrame
     
-def getMaxDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, cycled=False):
-    if cycled:
-        allColumns = getColumnsForCycleZScore(dataFrame)
-    else:
-        allColumns = getColumnsForZScore(dataFrame)
+def getMaxDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False):
+    allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
@@ -923,27 +901,27 @@ def rankTeamsByZScore(dataFrame, cycleDataFrame, tbaDataFrame, sliderValues, cyc
                     if ranking[2] and ranking[3]:
                         if cycleDataFrameBuffer[ranking[0]][bufferToUse][3] is None:
                             dataFrameToGenerate = getCycleDataFrameWithoutNoShows(getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame), dataFrame)
-                            dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5], True)
+                            dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5])
                             cycleDataFrameBuffer[ranking[0]][bufferToUse][3] = dataFrameToUse.copy()
                         else:
                             dataFrameToUse = cycleDataFrameBuffer[ranking[0]][bufferToUse][3]
                     elif ranking[3]:
                         if cycleDataFrameBuffer[ranking[0]][bufferToUse][2] is None:
                             dataFrameToGenerate = getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame)
-                            dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5], True)
+                            dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5])
                             cycleDataFrameBuffer[ranking[0]][bufferToUse][2] = dataFrameToUse.copy()
                         else:
                             dataFrameToUse = cycleDataFrameBuffer[ranking[0]][bufferToUse][2]
                     elif ranking[2]:
                         if cycleDataFrameBuffer[ranking[0]][bufferToUse][1] is None:
                             dataFrameToGenerate = getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame)
-                            dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5], True)
+                            dataFrameToUse = getDataFrame(dataFrameToGenerate, ranking[0], ranking[4], ranking[5])
                             cycleDataFrameBuffer[ranking[0]][bufferToUse][1] = dataFrameToUse.copy()
                         else:
                             dataFrameToUse = cycleDataFrameBuffer[ranking[0]][bufferToUse][1]
                     else:
                         if cycleDataFrameBuffer[ranking[0]][bufferToUse][0] is None:
-                            dataFrameToUse = getDataFrame(cycleDataFrame, ranking[0], ranking[4], ranking[5], True)
+                            dataFrameToUse = getDataFrame(cycleDataFrame, ranking[0], ranking[4], ranking[5])
                             cycleDataFrameBuffer[ranking[0]][bufferToUse][0] = dataFrameToUse.copy()
                         else:
                             dataFrameToUse = cycleDataFrameBuffer[ranking[0]][bufferToUse][0]
