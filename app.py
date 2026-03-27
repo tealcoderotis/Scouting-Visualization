@@ -626,7 +626,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if filePath != "":
                 if DEBUG:
                     self.dataFrame = analyzer.getDataFrameFromCSV(filePath)
-                    cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Time File")[0]
+                    cycleFilePath = QtWidgets.QFileDialog.getOpenFileName(self, filter="CSV files (*.csv)", caption="Open Cycle Accuracy File")[0]
                     if cycleFilePath != "":
                         self.cycleDataFrame = analyzer.getCycleDataFrameFromCSV(cycleFilePath)
                 else:
