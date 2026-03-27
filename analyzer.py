@@ -427,7 +427,7 @@ def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
         matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
         robotStopValue = matchData["robot_stop"].mode().to_list()[0]
         if robotStopValue != False:
-            filteredCycleDataFrame.drop(index=index, inplace=True)
+            filteredCycleDataFrame.drop(index=dataFrame.index[index], inplace=True)
     return filteredCycleDataFrame
 
 def getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame):
@@ -436,7 +436,7 @@ def getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame):
         matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
         noShowValue = matchData["no_show"].mode().to_list()[0]
         if noShowValue != False:
-            filteredCycleDataFrame.drop(index=index, inplace=True)
+            filteredCycleDataFrame.drop(index=dataFrame.index[index], inplace=True)
     return filteredCycleDataFrame
 
 def getDataFrameWithoutNoShows(dataFrame):
