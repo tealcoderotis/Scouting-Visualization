@@ -3,8 +3,7 @@ import pandas
 from io import StringIO
 from math import isnan, nan
 
-#TODO: Add rotinue to add overall cycle accuracy as a ranking metric
-#TODO: Readd robot stop filters if in Google Form (disable no show buttons and disable robot stop button if not in Google Form)
+#TODO: Fix bug whre it is unable to compute cycles without no shows or robot stops if all matches of a specfiic team have a now show or robot stop
 #TODO: Systems and math check!
 
 '''CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
@@ -416,10 +415,10 @@ def getAllTeams(dataFrame):
     return sorted(dataFrame["team_number"].drop_duplicates().to_list())
 
 def getDataFrameForTeam(dataFrame, teamNumber):
-    return dataFrame[dataFrame["team_number"].values == teamNumber]
+    return dataFrame.loc[(dataFrame["team_number"] == teamNumber)]
 
 def getDataFrameWithoutRobotStops(dataFrame):
-    return dataFrame.loc[(dataFrame["robot_stop"] == False)]
+    return dataFrame.loc[(dataFrame["robot_stop"] != True)]
 
 def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
     indexesToDrop = []
@@ -430,7 +429,6 @@ def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
         print(robotStopValue)
         if robotStopValue == True:
             indexesToDrop.append(index)
-    print(indexesToDrop)
     filteredCycleDataFrame.drop(index=indexesToDrop, inplace=True)
     return filteredCycleDataFrame
 
@@ -440,14 +438,13 @@ def getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame):
     for index, row in cycleDataFrame.iterrows():
         matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
         noShowValue = matchData["no_show"].mode().to_list()[0]
-        print(noShowValue)
         if noShowValue == True:
             indexesToDrop.append(index)
     filteredCycleDataFrame.drop(index=indexesToDrop, inplace=True)
     return filteredCycleDataFrame
 
 def getDataFrameWithoutNoShows(dataFrame):
-    return dataFrame.loc[(dataFrame["no_show"] == True)]
+    return dataFrame.loc[(dataFrame["no_show"] != True)]
 
 def getTotalRobotStopsForEachType(dataFrame, teamNumber):
     teamDataFrame = getDataFrameForTeam(dataFrame, teamNumber)
@@ -928,8 +925,6 @@ def rankTeamsByZScore(dataFrame, cycleDataFrame, tbaDataFrame, sliderValues, cyc
                     if ranking[2]:
                         dataFrameToUse = getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame)
                     mainDataFrame = getDataFrame(dataFrameToUse, ranking[0], ranking[4], ranking[5], True)
-                    print(dataFrameToUse)
-                    print(mainDataFrame)
                     '''if ranking[0] not in cycleDataFrameBuffer:
                         cycleDataFrameBuffer[ranking[0]] = {}
                     if ranking[4] == False and ranking[5] == False:
