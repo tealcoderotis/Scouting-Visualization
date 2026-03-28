@@ -688,7 +688,7 @@ def getTotalDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, c
     if cycled:
         allColumns = getColumnsForCycleZScore(dataFrame)
     else:
-        allColumns = getColumnsForZScore(dataFrame)
+        allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
@@ -709,7 +709,7 @@ def getAverageDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False,
     if cycled:
         allColumns = getColumnsForCycleZScore(dataFrame)
     else:
-        allColumns = getColumnsForZScore(dataFrame)
+        allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
@@ -730,7 +730,7 @@ def getMedianDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, 
     if cycled:
         allColumns = getColumnsForCycleZScore(dataFrame)
     else:
-        allColumns = getColumnsForZScore(dataFrame)
+        allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
@@ -751,7 +751,7 @@ def getModeDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, cy
     if cycled:
         allColumns = getColumnsForCycleZScore(dataFrame)
     else:
-        allColumns = getColumnsForZScore(dataFrame)
+        allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
@@ -776,7 +776,7 @@ def getMaxDataFrame(dataFrame, q1MinimumFilter=False, q3MaximumFilter=False, cyc
     if cycled:
         allColumns = getColumnsForCycleZScore(dataFrame)
     else:
-        allColumns = getColumnsForZScore(dataFrame)
+        allColumns = getColumnsForZScore(dataFrame, False)
     teams = getAllTeams(dataFrame)
     newDataFrame = pandas.DataFrame()
     for i in range(len(teams)):
