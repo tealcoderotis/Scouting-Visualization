@@ -4,6 +4,7 @@ from io import StringIO
 from math import isnan, nan
 
 #TODO: Fix bug whre it is unable to compute cycles without no shows or robot stops if all matches of a specfiic team have a now show or robot stop
+#TODO: Add minimum in additon to maximum as a metic type
 #TODO: Systems and math check!
 
 '''CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
@@ -426,7 +427,6 @@ def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
     for index, row in cycleDataFrame.iterrows():
         matchData = dataFrame.loc[(dataFrame["team_number"] == row["team_number"]) & (dataFrame["match_number"] == row["match_number"]) & (dataFrame["set_number"] == row["set_number"]) & (dataFrame["comp_level"] == row["comp_level"])]
         robotStopValue = matchData["robot_stop"].mode().to_list()[0]
-        print(robotStopValue)
         if robotStopValue == True:
             indexesToDrop.append(index)
     filteredCycleDataFrame.drop(index=indexesToDrop, inplace=True)
