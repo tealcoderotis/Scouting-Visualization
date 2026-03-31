@@ -3,9 +3,7 @@ import pandas
 from io import StringIO
 from math import isnan, nan
 
-#TODO: Fix bug whre it is unable to compute cycles without no shows or robot stops if all matches of a specfiic team have a now show or robot stop
 #TODO: Add minimum in additon to maximum as a metic type
-#TODO: Systems and math check!
 
 '''CLIMB_VALUES = ["no_climb", "park_climb", "shallow_climb", "deep_climb"]
 ROBOT_STOP_VALUES = ["no_stop", "one_stop", "many_stops", "end_stop"]
@@ -430,6 +428,7 @@ def getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame):
         if robotStopValue == True:
             indexesToDrop.append(index)
     filteredCycleDataFrame.drop(index=indexesToDrop, inplace=True)
+    filteredCycleDataFrame.columns = cycleDataFrame.columns
     return filteredCycleDataFrame
 
 def getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame):
@@ -441,6 +440,7 @@ def getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame):
         if noShowValue == True:
             indexesToDrop.append(index)
     filteredCycleDataFrame.drop(index=indexesToDrop, inplace=True)
+    filteredCycleDataFrame.columns = cycleDataFrame.columns
     return filteredCycleDataFrame
 
 def getDataFrameWithoutNoShows(dataFrame):
@@ -879,9 +879,9 @@ def rankTeamsByZScore(dataFrame, cycleDataFrame, tbaDataFrame, sliderValues, cyc
                 if ranking[1] != 0 or teamFilter[column][0] != 0:
                     dataFrameToUse = dataFrame.copy()
                     if ranking[3]:
-                        dataFrameToUse = getDataFrameWithoutNoShows(dataFrame)
+                        dataFrameToUse = getDataFrameWithoutNoShows(dataFrameToUse)
                     if ranking[2]:
-                        dataFrameToUse = getDataFrameWithoutRobotStops(dataFrame)
+                        dataFrameToUse = getDataFrameWithoutRobotStops(dataFrameToUse)
                     mainDataFrame = getAccuracyDataFrame(dataFrameToUse, COUNTED_VALUES[column]["column"], COUNTED_VALUES[column]["favorableValue"], column)
                     '''if column not in accuracyBuffer:
                         accuracyBuffer[column] = [None, None, None, None]
@@ -921,9 +921,9 @@ def rankTeamsByZScore(dataFrame, cycleDataFrame, tbaDataFrame, sliderValues, cyc
                 if ranking[1] != 0 or teamCycleFilter[column][0] != 0:
                     dataFrameToUse = cycleDataFrame.copy()
                     if ranking[3]:
-                        dataFrameToUse = getCycleDataFrameWithoutNoShows(cycleDataFrame, dataFrame)
+                        dataFrameToUse = getCycleDataFrameWithoutNoShows(dataFrameToUse, dataFrame)
                     if ranking[2]:
-                        dataFrameToUse = getCycleDataFrameWithoutRobotStops(cycleDataFrame, dataFrame)
+                        dataFrameToUse = getCycleDataFrameWithoutRobotStops(dataFrameToUse, dataFrame)
                     mainDataFrame = getDataFrame(dataFrameToUse, ranking[0], ranking[4], ranking[5], True)
                     '''if ranking[0] not in cycleDataFrameBuffer:
                         cycleDataFrameBuffer[ranking[0]] = {}
